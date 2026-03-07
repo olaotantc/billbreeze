@@ -98,39 +98,61 @@ export default function PaymentSummaryScreen() {
 
   const breakdown = getPayerBreakdown();
 
+  const hasPaymentHandles = !!(paymentHandles.venmo || paymentHandles.paypal || paymentHandles.cashapp);
+
+  const promptSetupHandles = (onSkip: () => void) => {
+    Alert.alert(
+      "No Payment Links",
+      "Add your Venmo, PayPal, or Cash App handle in Settings so recipients can pay you directly.",
+      [
+        {
+          text: "Set Up Now",
+          onPress: () => router.push("/(tabs)/settings"),
+        },
+        {
+          text: "Send Without Link",
+          style: "cancel",
+          onPress: onSkip,
+        },
+      ]
+    );
+  };
+
+  const shareMessage = (message: string, title: string) => {
+    Share.share({ message, title }).catch(() => {});
+  };
+
+  const buildShareMessageForPayer = (payerName: string) => {
+    const amount = breakdown[payerName]?.total || 0;
+    const payLinks = buildPaymentLinks(paymentHandles, amount);
+    return payLinks
+      ? `Hey ${payerName}! You owe ${formatCurrency(amount)} for ${receipt.merchantName || "our meal"}.${payLinks}`
+      : `Hey ${payerName}! You owe ${formatCurrency(amount)} for ${receipt.merchantName || "our meal"}. Thanks!`;
+  };
+
   const handleShare = async (payerName: string) => {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
 
-    const amount = breakdown[payerName]?.total || 0;
-    const payLinks = buildPaymentLinks(paymentHandles, amount);
-    const message = payLinks
-      ? `Hey ${payerName}! You owe ${formatCurrency(amount)} for ${receipt.merchantName || "our meal"}.${payLinks}`
-      : `Hey ${payerName}! You owe ${formatCurrency(amount)} for ${receipt.merchantName || "our meal"}. Thanks!`;
+    const message = buildShareMessageForPayer(payerName);
+    const title = `Payment Request - ${receipt.merchantName}`;
 
-    try {
-      await Share.share({
-        message,
-        title: `Payment Request - ${receipt.merchantName}`,
-      });
-    } catch (e) {
-      // user cancelled
+    if (!hasPaymentHandles) {
+      promptSetupHandles(() => shareMessage(message, title));
+      return;
     }
+
+    shareMessage(message, title);
   };
 
-  const handleShareAll = async () => {
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    }
-
+  const buildShareAllMessage = () => {
     const lines = receipt.payers
       .map((p) => `${p}: ${formatCurrency(breakdown[p]?.total || 0)}`)
       .join("\n");
 
-    const hasHandles = paymentHandles.venmo || paymentHandles.paypal || paymentHandles.cashapp;
     let paySection = "";
-    if (hasHandles) {
+    if (hasPaymentHandles) {
       const linkLines: string[] = [];
       if (paymentHandles.venmo) {
         const handle = paymentHandles.venmo.replace(/^@/, "");
@@ -147,16 +169,23 @@ export default function PaymentSummaryScreen() {
       paySection = "\n\nPay here:\n" + linkLines.join("\n");
     }
 
-    const message = `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total)}${paySection}`;
+    return `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total)}${paySection}`;
+  };
 
-    try {
-      await Share.share({
-        message,
-        title: `Bill Split - ${receipt.merchantName}`,
-      });
-    } catch (e) {
-      // user cancelled
+  const handleShareAll = async () => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     }
+
+    const message = buildShareAllMessage();
+    const title = `Bill Split - ${receipt.merchantName}`;
+
+    if (!hasPaymentHandles) {
+      promptSetupHandles(() => shareMessage(message, title));
+      return;
+    }
+
+    shareMessage(message, title);
   };
 
   const handleSaveRequests = async () => {
