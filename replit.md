@@ -10,6 +10,7 @@ Mobile bill-splitting app built with Expo React Native. Photograph a restaurant 
 - **Storage**: AsyncStorage for local data persistence
 - **State**: React Context (`AppProvider`) + useState for local state
 - **Image Transfer**: Uses `pendingImage` context state (not route params) to pass large base64 image data between screens
+- **Image Conversion**: All images (camera/gallery) converted to JPEG via expo-image-manipulator before OCR to avoid HEIC format issues
 
 ## Key Files
 ### Frontend
@@ -17,14 +18,14 @@ Mobile bill-splitting app built with Expo React Native. Photograph a restaurant 
 - `app/index.tsx` - Welcome/onboarding screen
 - `app/sign-in.tsx` - Sign in modal
 - `app/(tabs)/` - Main tab navigation (Home, Inbox, Settings)
-- `app/camera.tsx` - Camera/gallery capture screen
+- `app/camera.tsx` - Camera/gallery capture screen (converts to JPEG before OCR)
 - `app/receipt-review.tsx` - OCR results + editable line items
 - `app/split-config.tsx` - Split mode selector + payer management
 - `app/payer-assignment.tsx` - Itemized assignment of items to payers
 - `app/payment-summary.tsx` - Per-person breakdown + share sheet
 
 ### Backend
-- `server/routes.ts` - OCR parsing endpoint (`POST /api/ocr/parse`)
+- `server/routes.ts` - OCR parsing endpoint (`POST /api/ocr/parse`) + receipt text parser
 - `server/index.ts` - Express server setup with CORS, 10mb body limit
 
 ### Shared
@@ -34,6 +35,14 @@ Mobile bill-splitting app built with Expo React Native. Photograph a restaurant 
 - `lib/utils.ts` - Formatting helpers
 - `lib/query-client.ts` - React Query setup + API helpers
 - `constants/colors.ts` - Theme colors (teal/gold palette)
+
+## OCR Parser
+The receipt text parser (`parseReceiptText` in server/routes.ts) handles:
+- Items with name and price on the same line (e.g., "Burger $18.00")
+- Items with name and price on separate lines (common with Google Vision OCR)
+- Grouped summary labels (Subtotal/Tax/Tip/Total) followed by grouped prices
+- Noise filtering (URLs, dates, phone numbers, non-receipt text)
+- Quantity prefix stripping (e.g., "2x Cheeseburger" -> "Cheeseburger")
 
 ## Design
 - **Primary**: #004E45 (deep teal)

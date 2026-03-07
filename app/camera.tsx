@@ -11,11 +11,21 @@ import {
 import { router } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApp } from "@/lib/app-context";
+
+async function convertToJpegBase64(uri: string): Promise<{ uri: string; base64: string }> {
+  const result = await ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: { width: 1200 } }],
+    { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+  );
+  return { uri: result.uri, base64: result.base64 || "" };
+}
 
 export default function CameraScreen() {
   const insets = useSafeAreaInsets();
@@ -34,11 +44,11 @@ export default function CameraScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
       const photo = await cameraRef.current.takePictureAsync({
-        base64: true,
         quality: 0.7,
       });
       if (photo) {
-        setPendingImage({ uri: photo.uri, base64: photo.base64 || "" });
+        const jpeg = await convertToJpegBase64(photo.uri);
+        setPendingImage(jpeg);
         router.replace("/receipt-review");
       }
     } catch (e) {
@@ -57,7 +67,8 @@ export default function CameraScreen() {
       });
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        setPendingImage({ uri: asset.uri, base64: asset.base64 || "" });
+        const jpeg = await convertToJpegBase64(asset.uri);
+        setPendingImage(jpeg);
         router.replace("/receipt-review");
       }
     } catch (e) {

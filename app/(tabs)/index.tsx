@@ -13,6 +13,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { useApp } from "@/lib/app-context";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import Colors from "@/constants/colors";
@@ -40,7 +41,12 @@ export default function HomeScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        setPendingImage({ uri: asset.uri, base64: asset.base64 || "" });
+        const jpeg = await ImageManipulator.manipulateAsync(
+          asset.uri,
+          [{ resize: { width: 1200 } }],
+          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+        );
+        setPendingImage({ uri: jpeg.uri, base64: jpeg.base64 || "" });
         router.push("/receipt-review");
       }
     } catch (e) {
