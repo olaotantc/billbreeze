@@ -1,4 +1,3 @@
-// template
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -14,14 +13,21 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
+import { AppProvider } from "@/lib/app-context";
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
+    <Stack screenOptions={{ headerShown: false, headerBackTitle: "Back" }}>
+      <Stack.Screen name="index" />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="sign-in" options={{ presentation: "modal" }} />
+      <Stack.Screen name="camera" options={{ presentation: "fullScreenModal" }} />
+      <Stack.Screen name="receipt-review" />
+      <Stack.Screen name="split-config" />
+      <Stack.Screen name="payer-assignment" />
+      <Stack.Screen name="payment-summary" />
     </Stack>
   );
 }
@@ -47,7 +53,9 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView>
           <KeyboardProvider>
-            <RootLayoutNav />
+            <AppProvider>
+              <RootLayoutNav />
+            </AppProvider>
           </KeyboardProvider>
         </GestureHandlerRootView>
       </QueryClientProvider>
