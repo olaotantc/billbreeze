@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react";
 import type { Receipt, PaymentRequest } from "@/shared/schema";
 import * as Storage from "@/lib/storage";
+import type { PaymentHandles } from "@/lib/storage";
 
 interface PendingImage {
   uri: string;
@@ -12,6 +13,7 @@ interface AppContextValue {
   isLoading: boolean;
   receipts: Receipt[];
   paymentRequests: PaymentRequest[];
+  paymentHandles: PaymentHandles;
   pendingImage: PendingImage | null;
   setPendingImage: (image: PendingImage | null) => void;
   signIn: (email: string, name: string) => Promise<void>;
@@ -21,6 +23,7 @@ interface AppContextValue {
   removeReceipt: (id: string) => Promise<void>;
   addPaymentRequests: (requests: PaymentRequest[]) => Promise<void>;
   toggleRequestStatus: (id: string) => Promise<void>;
+  updatePaymentHandles: (handles: PaymentHandles) => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -31,18 +34,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
+  const [paymentHandles, setPaymentHandles] = useState<PaymentHandles>({});
   const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
 
   const loadData = useCallback(async () => {
     try {
-      const [savedUser, savedReceipts, savedRequests] = await Promise.all([
+      const [savedUser, savedReceipts, savedRequests, savedHandles] = await Promise.all([
         Storage.getUser(),
         Storage.getReceipts(),
         Storage.getPaymentRequests(),
+        Storage.getPaymentHandles(),
       ]);
       setUser(savedUser);
       setReceipts(savedReceipts);
       setPaymentRequests(savedRequests);
+      setPaymentHandles(savedHandles);
     } catch (e) {
       console.error("Failed to load data:", e);
     } finally {
@@ -84,6 +90,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPaymentRequests((prev) => [...requests, ...prev]);
   }, []);
 
+  const updatePaymentHandles = useCallback(async (handles: PaymentHandles) => {
+    await Storage.setPaymentHandles(handles);
+    setPaymentHandles(handles);
+  }, []);
+
   const toggleRequestStatus = useCallback(async (id: string) => {
     const request = paymentRequests.find((r) => r.id === id);
     if (!request) return;
@@ -100,6 +111,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isLoading,
       receipts,
       paymentRequests,
+      paymentHandles,
       pendingImage,
       setPendingImage,
       signIn,
@@ -109,9 +121,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeReceipt,
       addPaymentRequests,
       toggleRequestStatus,
+      updatePaymentHandles,
       refreshData: loadData,
     }),
-    [user, isLoading, receipts, paymentRequests, pendingImage, signIn, signOut, addReceipt, updateReceipt, removeReceipt, addPaymentRequests, toggleRequestStatus, loadData]
+    [user, isLoading, receipts, paymentRequests, paymentHandles, pendingImage, signIn, signOut, addReceipt, updateReceipt, removeReceipt, addPaymentRequests, toggleRequestStatus, updatePaymentHandles, loadData]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

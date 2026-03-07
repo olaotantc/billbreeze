@@ -4,6 +4,22 @@ import type { Receipt, PaymentRequest } from "@/shared/schema";
 const RECEIPTS_KEY = "@billbreeze_receipts";
 const REQUESTS_KEY = "@billbreeze_requests";
 const USER_KEY = "@billbreeze_user";
+const PAYMENT_HANDLES_KEY = "@billbreeze_payment_handles";
+
+export interface PaymentHandles {
+  venmo?: string;
+  paypal?: string;
+  cashapp?: string;
+}
+
+export async function getPaymentHandles(): Promise<PaymentHandles> {
+  const data = await AsyncStorage.getItem(PAYMENT_HANDLES_KEY);
+  return data ? JSON.parse(data) : {};
+}
+
+export async function setPaymentHandles(handles: PaymentHandles): Promise<void> {
+  await AsyncStorage.setItem(PAYMENT_HANDLES_KEY, JSON.stringify(handles));
+}
 
 export async function getUser(): Promise<{ email: string; name: string } | null> {
   const data = await AsyncStorage.getItem(USER_KEY);

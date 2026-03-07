@@ -18,10 +18,30 @@ import { formatCurrency, generateId } from "@/lib/utils";
 import Colors from "@/constants/colors";
 import type { PaymentRequest } from "@/shared/schema";
 
+function buildPaymentLinks(handles: { venmo?: string; paypal?: string; cashapp?: string }, amount: number): string {
+  const links: string[] = [];
+  const amountStr = amount.toFixed(2);
+
+  if (handles.venmo) {
+    const handle = handles.venmo.replace(/^@/, "");
+    links.push(`Venmo: https://venmo.com/${encodeURIComponent(handle)}?txn=pay&amount=${amountStr}`);
+  }
+  if (handles.paypal) {
+    const handle = handles.paypal.replace(/^@/, "");
+    links.push(`PayPal: https://paypal.me/${encodeURIComponent(handle)}/${amountStr}`);
+  }
+  if (handles.cashapp) {
+    const handle = handles.cashapp.replace(/^\$/, "");
+    links.push(`Cash App: https://cash.app/$${encodeURIComponent(handle)}/${amountStr}`);
+  }
+
+  return links.length > 0 ? "\n\nPay here:\n" + links.join("\n") : "";
+}
+
 export default function PaymentSummaryScreen() {
   const insets = useSafeAreaInsets();
   const { receiptId } = useLocalSearchParams<{ receiptId: string }>();
-  const { receipts, addPaymentRequests } = useApp();
+  const { receipts, addPaymentRequests, paymentHandles } = useApp();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -84,7 +104,10 @@ export default function PaymentSummaryScreen() {
     }
 
     const amount = breakdown[payerName]?.total || 0;
-    const message = `Hey ${payerName}! You owe ${formatCurrency(amount)} for ${receipt.merchantName || "our meal"}. Thanks!`;
+    const payLinks = buildPaymentLinks(paymentHandles, amount);
+    const message = payLinks
+      ? `Hey ${payerName}! You owe ${formatCurrency(amount)} for ${receipt.merchantName || "our meal"}.${payLinks}`
+      : `Hey ${payerName}! You owe ${formatCurrency(amount)} for ${receipt.merchantName || "our meal"}. Thanks!`;
 
     try {
       await Share.share({
@@ -105,7 +128,26 @@ export default function PaymentSummaryScreen() {
       .map((p) => `${p}: ${formatCurrency(breakdown[p]?.total || 0)}`)
       .join("\n");
 
-    const message = `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total)}`;
+    const hasHandles = paymentHandles.venmo || paymentHandles.paypal || paymentHandles.cashapp;
+    let paySection = "";
+    if (hasHandles) {
+      const linkLines: string[] = [];
+      if (paymentHandles.venmo) {
+        const handle = paymentHandles.venmo.replace(/^@/, "");
+        linkLines.push(`Venmo: https://venmo.com/${encodeURIComponent(handle)}`);
+      }
+      if (paymentHandles.paypal) {
+        const handle = paymentHandles.paypal.replace(/^@/, "");
+        linkLines.push(`PayPal: https://paypal.me/${encodeURIComponent(handle)}`);
+      }
+      if (paymentHandles.cashapp) {
+        const handle = paymentHandles.cashapp.replace(/^\$/, "");
+        linkLines.push(`Cash App: https://cash.app/$${encodeURIComponent(handle)}`);
+      }
+      paySection = "\n\nPay here:\n" + linkLines.join("\n");
+    }
+
+    const message = `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total)}${paySection}`;
 
     try {
       await Share.share({
@@ -175,6 +217,19 @@ export default function PaymentSummaryScreen() {
             {receipt.payers.length} people
           </Text>
         </View>
+
+        {!paymentHandles.venmo && !paymentHandles.paypal && !paymentHandles.cashapp && (
+          <Pressable
+            style={styles.setupBanner}
+            onPress={() => router.push("/(tabs)/settings")}
+          >
+            <Feather name="link" size={16} color={Colors.accent} />
+            <Text style={styles.setupBannerText}>
+              Add your Venmo, PayPal, or Cash App in Settings to include payment links in requests
+            </Text>
+            <Feather name="chevron-right" size={14} color={Colors.textTertiary} />
+          </Pressable>
+        )}
 
         {receipt.payers.map((payer) => {
           const data = breakdown[payer];
@@ -399,6 +454,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
     color: Colors.primary,
+  },
+  setupBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF8E7",
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "#F0D78C",
+  },
+  setupBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: Colors.text,
+    lineHeight: 18,
   },
   bottomBar: {
     paddingHorizontal: 24,
