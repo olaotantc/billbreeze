@@ -1,0 +1,143 @@
+ SplitSnap — Snap, Split & Settle the Bill                                                                                                                
+                  
+  Prioritize a working end-to-end MVP with the simplest implementation path. Defer advanced native optimizations and non-essential integrations until after
+   the core flow works.
+
+  Project Overview
+
+  Mobile bill-splitting app: photograph a restaurant receipt, extract line items via OCR, calculate tax/tip-aware splits among friends, and generate
+  shareable payment request summaries. Built with Expo React Native, Firebase backend, and cloud OCR for fast MVP delivery.
+
+  Tech Stack
+
+  - Frontend: Expo React Native (TypeScript)
+  - Backend: Firebase (Auth, Firestore, Storage, Cloud Functions)
+  - OCR: Google Cloud Vision API (cloud-based — defer on-device ML Kit to v2)
+  - Payments: Stripe Payment Links via Cloud Functions (Phase 2)
+  - Notifications: Firebase Cloud Messaging (Phase 3)
+
+  Design Direction
+
+  Mood: Professional, secure, trustworthy
+
+  Colors:
+  - Background: #FFFFFF
+  - Surface: #F7FBFA
+  - Primary: #004E45
+  - Accent: #F0B429 (emphasis only, not body text)
+  - Text: #08201C (primary), #4B6A65 (secondary)
+  - Success: #1F9D74, Error: #D6453B
+
+  Typography:
+  - Headings: General Sans 600
+  - Body: Fraunces 400/500
+  - Pair creates editorial warmth with UI clarity
+
+  Component Style:
+  - Buttons: 44px height, 6px radius, ghost style with 1px border
+  - Cards: 6px radius, subtle hover shadow
+  - Touch targets: minimum 44px for mobile
+  - Bottom navigation: 56px persistent bar
+
+  Layout:
+  - Mobile-first single column, max-width 720px
+  - Spacing scale: 4/8/12/16/24/32
+  - Camera view: portrait full-screen with translucent summary overlay
+
+  Screens
+
+  1. Onboarding / Welcome — value prop, get started CTA
+  2. Sign In — email or phone auth via Firebase
+  3. Home / Dashboard — recent receipts list, quick-scan CTA, import image option
+  4. Camera / Capture — full-screen camera preview, capture button, gallery import
+  5. Receipt Review — parsed line items (editable), merchant/date/total header, assign button per item
+  6. Split Configuration — mode selector (equal, itemized, percentage, fixed), tax/tip toggles, per-person preview
+  7. Payer Assignment — add payers manually, assign items to people
+  8. Payment Summary & Share — per-person amounts, native share sheet, copy link, QR code option
+  9. Requests Inbox — payment request statuses (pending/paid/failed)
+  10. Settings — profile, payment preferences, export
+
+  Build Sequence
+
+  Build in this exact order. Get each step working before starting the next.
+
+  Step 1 — Auth + Shell
+  - Firebase Auth (email/phone sign-in)
+  - Bottom tab navigation (Home, Scan, Inbox, Settings)
+  - Home screen with empty state
+
+  Step 2 — Capture + Upload
+  - Camera screen using expo-camera
+  - Gallery image picker as alternative
+  - Upload captured image to Firebase Storage
+  - Display uploaded image on review screen
+
+  Step 3 — OCR + Receipt Parsing
+  - Send uploaded image to Google Cloud Vision API (via Cloud Function)
+  - Parse OCR text into structured data: merchant name, line items with prices, subtotal, tax, total
+  - Display parsed items on Receipt Review screen with editable text fields
+  - Flag low-confidence items for manual correction
+
+  Step 4 — Split Calculator
+  - Equal split: divide total evenly among N payers
+  - Fixed amount: assign custom amounts per person
+  - Tax & tip toggles: proportionally distribute tax/tip across payers
+  - Real-time per-person preview as selections change
+
+  Step 5 — Payer Management + Assignment
+  - Add payers by name (manual entry)
+  - Assign individual line items to specific payers (for itemized split)
+  - Summary showing each payer's total
+
+  Step 6 — Share + Status Tracking
+  - Generate payment request summary per person
+  - Native share sheet (expo-sharing) with prefilled message
+  - Store payment requests in Firestore with status (pending/paid)
+  - Requests Inbox showing all sent/received requests
+
+  Defer to v2:
+  - Stripe Payment Links (replace summary with actual payment collection)
+  - On-device OCR with Google ML Kit (replace Cloud Vision)
+  - Edge detection and auto-capture
+  - Push notifications for payment reminders
+  - Device contacts integration for payer prefill
+  - WhatsApp deep link integration
+
+  User Flows
+
+  Quick Split: Home → Camera → Capture → OCR parse → Review items → Equal split → Share summary → Track in Inbox
+
+  Itemized Split: Home → Camera → Capture → OCR parse → Review items → Assign items to payers → Split with tax/tip → Share individual summaries
+
+  Manual Entry: Home → "Create Manual Split" → Enter total + payers → Split → Share
+
+  Data Model (Firestore)
+
+  users/{uid}
+    - email, displayName, createdAt
+
+  receipts/{receiptId}
+    - userId, merchantName, date, imageUrl
+    - lineItems: [{ name, price, assignedTo[] }]
+    - subtotal, tax, tip, total
+    - splitMode: "equal" | "itemized" | "percentage" | "fixed"
+    - createdAt
+
+  paymentRequests/{requestId}
+    - receiptId, fromUserId
+    - payerName, amount, status: "pending" | "paid"
+    - sharedVia, createdAt
+
+  Cloud Functions
+
+  - parseReceipt — receives image URL, calls Google Cloud Vision, returns structured line items
+  - createPaymentRequest — creates per-payer payment request documents
+  - (v2) handleStripeWebhook — updates payment request status on Stripe events
+
+  Environment Variables
+
+  GOOGLE_CLOUD_VISION_API_KEY=
+  FIREBASE_PROJECT_ID=
+  FIREBASE_API_KEY=
+  STRIPE_SECRET_KEY= (v2)
+  STRIPE_WEBHOOK_SECRET= (v2)
