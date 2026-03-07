@@ -50,7 +50,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const fullText = annotation?.textAnnotations?.[0]?.description || "";
+      console.log("OCR raw text length:", fullText.length, "chars");
+      if (fullText.length > 0) {
+        console.log("OCR first 200 chars:", fullText.substring(0, 200));
+      }
       const parsed = parseReceiptText(fullText);
+      console.log("Parsed result:", JSON.stringify({ merchantName: parsed.merchantName, items: parsed.lineItems.length, subtotal: parsed.subtotal, tax: parsed.tax, total: parsed.total }));
 
       return res.json(parsed);
     } catch (error) {
@@ -78,33 +83,48 @@ function parseReceiptText(text: string): {
   let tax: number | null = null;
   let total: number | null = null;
 
-  const pricePattern = /\$?\s*(\d+[.,]\d{2})\s*$/;
-  const subtotalPattern = /sub\s*total/i;
-  const taxPattern = /\btax\b/i;
-  const totalPattern = /\btotal\b/i;
+  const pricePatterns = [
+    /\$\s*(\d+[.,]\d{2})\s*$/,
+    /(\d+[.,]\d{2})\s*$/,
+    /^\$?\s*(\d+[.,]\d{2})\s+/,
+  ];
+  const subtotalPattern = /sub\s*-?\s*total/i;
+  const taxPattern = /\btax\b|\bhst\b|\bgst\b|\bpst\b|\bvat\b/i;
+  const totalPattern = /\btotal\b|\bamount\s*due\b|\bbalance\s*due\b/i;
   const tipPattern = /\btip\b|\bgratuity\b/i;
+  const discountPattern = /\bdiscount\b|\bsavings\b|\bcoupon\b|\bpromo\b/i;
   const skipPatterns = [
-    /^(tel|phone|fax|address|www|http|date|time|order|check|table|server|cashier|card|visa|master|amex|debit|credit|change|balance|thank|receipt)/i,
+    /^(tel|phone|fax|address|www|http|date|time|order|check|table|server|cashier|card|visa|master|amex|debit|credit|change|balance\b(?!\s*due)|thank|receipt|welcome|store|guest|transaction|ref|auth|approved|member|loyalty|reward|points|earn)/i,
     /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/,
     /^\d{1,2}:\d{2}/,
     /^#\d+/,
     /^\*{3,}/,
     /^-{3,}/,
     /^={3,}/,
+    /^\d{4,}/,
+    /^x{4,}/i,
   ];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
 
     if (skipPatterns.some((p) => p.test(line))) continue;
+    if (discountPattern.test(line)) continue;
 
-    const priceMatch = line.match(pricePattern);
-    if (!priceMatch) continue;
+    let price: number | null = null;
+    let name = "";
 
-    const price = parseFloat(priceMatch[1].replace(",", "."));
-    const name = line.replace(pricePattern, "").replace(/\$/, "").trim();
+    for (const pattern of pricePatterns) {
+      const match = line.match(pattern);
+      if (match) {
+        price = parseFloat(match[1].replace(",", "."));
+        name = line.replace(pattern, "").replace(/\$/g, "").replace(/\s{2,}/g, " ").trim();
+        break;
+      }
+    }
 
-    if (!name || price <= 0) continue;
+    if (price === null || price <= 0) continue;
+    if (!name && !subtotalPattern.test(line) && !taxPattern.test(line) && !totalPattern.test(line)) continue;
 
     if (subtotalPattern.test(line)) {
       subtotal = price;
@@ -114,8 +134,11 @@ function parseReceiptText(text: string): {
       total = price;
     } else if (tipPattern.test(line)) {
       continue;
-    } else {
-      lineItems.push({ name, price });
+    } else if (name) {
+      name = name.replace(/^\d+\s*[xX@]\s*/, "").replace(/\s*\d+\s*$/, "").trim();
+      if (name.length > 1) {
+        lineItems.push({ name, price });
+      }
     }
   }
 

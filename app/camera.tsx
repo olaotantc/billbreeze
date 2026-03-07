@@ -122,20 +122,19 @@ export default function CameraScreen() {
     <View style={styles.container}>
       <CameraView
         ref={cameraRef}
-        style={styles.camera}
+        style={StyleSheet.absoluteFill}
         facing="back"
-      >
-        <View style={[styles.overlay, { paddingTop: topInset + 8 }]}>
-          <View style={styles.topBar}>
-            <Pressable
-              style={styles.closeCircle}
-              onPress={() => router.back()}
-            >
-              <Feather name="x" size={22} color={Colors.white} />
-            </Pressable>
-            <Text style={styles.cameraTitle}>Scan Receipt</Text>
-            <View style={{ width: 40 }} />
-          </View>
+      />
+      <View style={[styles.overlayContainer, { paddingTop: topInset + 8 }]}>
+        <View style={styles.topBar}>
+          <Pressable
+            style={styles.closeCircle}
+            onPress={() => router.back()}
+          >
+            <Feather name="x" size={22} color={Colors.white} />
+          </Pressable>
+          <Text style={styles.cameraTitle}>Scan Receipt</Text>
+          <View style={{ width: 40 }} />
         </View>
 
         <View style={styles.receiptFrame}>
@@ -176,7 +175,7 @@ export default function CameraScreen() {
 
           <View style={{ width: 48 }} />
         </View>
-      </CameraView>
+      </View>
     </View>
   );
 }
@@ -195,10 +194,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: Colors.background,
   },
-  camera: {
-    flex: 1,
-  },
-  overlay: {
+  overlayContainer: {
+    ...StyleSheet.absoluteFillObject,
     paddingHorizontal: 16,
   },
   topBar: {
