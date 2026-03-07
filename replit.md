@@ -1,4 +1,4 @@
-# SplitSnap - Bill Splitting App
+# BillBreeze - Bill Splitting App
 
 ## Overview
 Mobile bill-splitting app built with Expo React Native. Photograph a restaurant receipt, extract line items via OCR, calculate tax/tip-aware splits among friends, and generate shareable payment request summaries.
@@ -9,6 +9,7 @@ Mobile bill-splitting app built with Expo React Native. Photograph a restaurant 
 - **OCR**: Google Cloud Vision API (via server proxy at `/api/ocr/parse`)
 - **Storage**: AsyncStorage for local data persistence
 - **State**: React Context (`AppProvider`) + useState for local state
+- **Image Transfer**: Uses `pendingImage` context state (not route params) to pass large base64 image data between screens
 
 ## Key Files
 ### Frontend
@@ -24,11 +25,11 @@ Mobile bill-splitting app built with Expo React Native. Photograph a restaurant 
 
 ### Backend
 - `server/routes.ts` - OCR parsing endpoint (`POST /api/ocr/parse`)
-- `server/index.ts` - Express server setup with CORS
+- `server/index.ts` - Express server setup with CORS, 10mb body limit
 
 ### Shared
 - `shared/schema.ts` - TypeScript types (Receipt, LineItem, PaymentRequest)
-- `lib/app-context.tsx` - Global state provider
+- `lib/app-context.tsx` - Global state provider (includes pendingImage for camera/gallery)
 - `lib/storage.ts` - AsyncStorage CRUD operations
 - `lib/utils.ts` - Formatting helpers
 - `lib/query-client.ts` - React Query setup + API helpers

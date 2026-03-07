@@ -85,7 +85,7 @@ export default function CameraScreen() {
           </View>
           <Text style={styles.permissionTitle}>Camera Access</Text>
           <Text style={styles.permissionText}>
-            SplitSnap needs camera access to scan receipts
+            BillBreeze needs camera access to scan receipts
           </Text>
           <Pressable
             style={({ pressed }) => [

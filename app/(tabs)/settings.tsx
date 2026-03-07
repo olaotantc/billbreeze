@@ -58,7 +58,7 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>General</Text>
-        <SettingRow icon="info" label="About SplitSnap" />
+        <SettingRow icon="info" label="About BillBreeze" />
         <SettingRow icon="shield" label="Privacy" />
         <SettingRow icon="help-circle" label="Help & Support" />
       </View>
@@ -77,7 +77,7 @@ export default function SettingsScreen() {
         </Pressable>
       </View>
 
-      <Text style={styles.version}>SplitSnap v1.0.0</Text>
+      <Text style={styles.version}>BillBreeze v1.0.0</Text>
     </View>
   );
 }

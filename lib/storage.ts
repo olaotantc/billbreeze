@@ -1,9 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Receipt, PaymentRequest } from "@/shared/schema";
 
-const RECEIPTS_KEY = "@splitsnap_receipts";
-const REQUESTS_KEY = "@splitsnap_requests";
-const USER_KEY = "@splitsnap_user";
+const RECEIPTS_KEY = "@billbreeze_receipts";
+const REQUESTS_KEY = "@billbreeze_requests";
+const USER_KEY = "@billbreeze_user";
 
 export async function getUser(): Promise<{ email: string; name: string } | null> {
   const data = await AsyncStorage.getItem(USER_KEY);

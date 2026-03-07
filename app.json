@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "SplitSnap",
-    "slug": "splitsnap",
+    "name": "BillBreeze",
+    "slug": "billbreeze",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "splitsnap",
+    "scheme": "billbreeze",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.splitsnap"
+      "bundleIdentifier": "com.billbreeze"
     },
     "android": {
-      "package": "com.splitsnap",
+      "package": "com.billbreeze",
       "adaptiveIcon": {
         "backgroundColor": "#004E45",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

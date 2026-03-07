@@ -46,7 +46,7 @@ export default function WelcomeScreen() {
           <View style={styles.iconContainer}>
             <Feather name="scissors" size={40} color={Colors.accent} />
           </View>
-          <Text style={styles.title}>SplitSnap</Text>
+          <Text style={styles.title}>BillBreeze</Text>
           <Text style={styles.subtitle}>
             Snap, Split & Settle the Bill
           </Text>
