@@ -37,13 +37,7 @@
         }
       ],
       "expo-font",
-      "expo-web-browser",
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "SplitSnap needs camera access to scan receipts"
-        }
-      ]
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
