@@ -15,9 +15,11 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useApp } from "@/lib/app-context";
 
 export default function CameraScreen() {
   const insets = useSafeAreaInsets();
+  const { setPendingImage } = useApp();
   const [permission, requestPermission] = useCameraPermissions();
   const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = useRef<CameraView>(null);
@@ -36,13 +38,8 @@ export default function CameraScreen() {
         quality: 0.7,
       });
       if (photo) {
-        router.replace({
-          pathname: "/receipt-review",
-          params: {
-            imageUri: photo.uri,
-            imageBase64: photo.base64 || "",
-          },
-        });
+        setPendingImage({ uri: photo.uri, base64: photo.base64 || "" });
+        router.replace("/receipt-review");
       }
     } catch (e) {
       Alert.alert("Error", "Failed to take photo");
@@ -60,13 +57,8 @@ export default function CameraScreen() {
       });
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        router.replace({
-          pathname: "/receipt-review",
-          params: {
-            imageUri: asset.uri,
-            imageBase64: asset.base64 || "",
-          },
-        });
+        setPendingImage({ uri: asset.uri, base64: asset.base64 || "" });
+        router.replace("/receipt-review");
       }
     } catch (e) {
       Alert.alert("Error", "Failed to pick image");

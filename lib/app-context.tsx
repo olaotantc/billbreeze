@@ -2,11 +2,18 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import type { Receipt, PaymentRequest } from "@/shared/schema";
 import * as Storage from "@/lib/storage";
 
+interface PendingImage {
+  uri: string;
+  base64: string;
+}
+
 interface AppContextValue {
   user: { email: string; name: string } | null;
   isLoading: boolean;
   receipts: Receipt[];
   paymentRequests: PaymentRequest[];
+  pendingImage: PendingImage | null;
+  setPendingImage: (image: PendingImage | null) => void;
   signIn: (email: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
   addReceipt: (receipt: Receipt) => Promise<void>;
@@ -24,6 +31,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
+  const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -92,6 +100,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isLoading,
       receipts,
       paymentRequests,
+      pendingImage,
+      setPendingImage,
       signIn,
       signOut,
       addReceipt,
@@ -101,7 +111,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toggleRequestStatus,
       refreshData: loadData,
     }),
-    [user, isLoading, receipts, paymentRequests, signIn, signOut, addReceipt, updateReceipt, removeReceipt, addPaymentRequests, toggleRequestStatus, loadData]
+    [user, isLoading, receipts, paymentRequests, pendingImage, signIn, signOut, addReceipt, updateReceipt, removeReceipt, addPaymentRequests, toggleRequestStatus, loadData]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

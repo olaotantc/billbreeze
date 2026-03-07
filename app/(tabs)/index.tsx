@@ -20,7 +20,7 @@ import type { Receipt } from "@/shared/schema";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { user, receipts, removeReceipt } = useApp();
+  const { user, receipts, removeReceipt, setPendingImage } = useApp();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
   const handleScan = () => {
@@ -40,13 +40,8 @@ export default function HomeScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        router.push({
-          pathname: "/receipt-review",
-          params: {
-            imageUri: asset.uri,
-            imageBase64: asset.base64 || "",
-          },
-        });
+        setPendingImage({ uri: asset.uri, base64: asset.base64 || "" });
+        router.push("/receipt-review");
       }
     } catch (e) {
       Alert.alert("Error", "Failed to pick image");

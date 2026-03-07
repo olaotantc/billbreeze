@@ -10,7 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
@@ -22,32 +22,26 @@ import type { LineItem, Receipt } from "@/shared/schema";
 
 export default function ReceiptReviewScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{
-    imageUri?: string;
-    imageBase64?: string;
-    receiptId?: string;
-  }>();
-  const { receipts, addReceipt, updateReceipt } = useApp();
+  const { receipts, addReceipt, updateReceipt, pendingImage, setPendingImage } = useApp();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const existingReceipt = params.receiptId
-    ? receipts.find((r) => r.id === params.receiptId)
-    : null;
-
-  const [merchantName, setMerchantName] = useState(existingReceipt?.merchantName || "");
-  const [lineItems, setLineItems] = useState<LineItem[]>(existingReceipt?.lineItems || []);
-  const [tax, setTax] = useState(existingReceipt?.tax?.toString() || "0");
-  const [tip, setTip] = useState(existingReceipt?.tip?.toString() || "0");
+  const [merchantName, setMerchantName] = useState("");
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [tax, setTax] = useState("0");
+  const [tip, setTip] = useState("0");
   const [isScanning, setIsScanning] = useState(false);
-  const [scanComplete, setScanComplete] = useState(!!existingReceipt);
+  const [scanComplete, setScanComplete] = useState(false);
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.price, 0);
   const total = subtotal + (parseFloat(tax) || 0) + (parseFloat(tip) || 0);
 
   useEffect(() => {
-    if (params.imageBase64 && !existingReceipt) {
-      scanReceipt(params.imageBase64);
+    if (pendingImage?.base64) {
+      scanReceipt(pendingImage.base64);
+      setPendingImage(null);
+    } else if (!pendingImage) {
+      setScanComplete(true);
     }
   }, []);
 
@@ -134,25 +128,21 @@ export default function ReceiptReviewScreen() {
     }
 
     const receipt: Receipt = {
-      id: existingReceipt?.id || generateId(),
+      id: generateId(),
       merchantName: merchantName || "Receipt",
-      date: existingReceipt?.date || "",
-      imageUri: params.imageUri || existingReceipt?.imageUri,
+      date: "",
+      imageUri: undefined,
       lineItems,
       subtotal,
       tax: parseFloat(tax) || 0,
       tip: parseFloat(tip) || 0,
       total,
-      splitMode: existingReceipt?.splitMode || "equal",
-      payers: existingReceipt?.payers || [],
-      createdAt: existingReceipt?.createdAt || new Date().toISOString(),
+      splitMode: "equal",
+      payers: [],
+      createdAt: new Date().toISOString(),
     };
 
-    if (existingReceipt) {
-      await updateReceipt(receipt);
-    } else {
-      await addReceipt(receipt);
-    }
+    await addReceipt(receipt);
 
     router.push({
       pathname: "/split-config",
