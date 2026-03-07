@@ -38,9 +38,14 @@ export default function ReceiptReviewScreen() {
 
   useEffect(() => {
     if (pendingImage?.base64) {
-      scanReceipt(pendingImage.base64);
+      const b64 = pendingImage.base64;
+      console.log("[OCR-DEBUG] pendingImage base64 length:", b64.length);
+      console.log("[OCR-DEBUG] base64 first 80 chars:", b64.substring(0, 80));
+      console.log("[OCR-DEBUG] base64 last 20 chars:", b64.substring(b64.length - 20));
       setPendingImage(null);
+      scanReceipt(b64);
     } else if (!pendingImage) {
+      console.log("[OCR-DEBUG] No pendingImage available on mount");
       setScanComplete(true);
     }
   }, []);

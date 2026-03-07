@@ -10,10 +10,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "imageBase64 is required" });
       }
 
+      console.log("[OCR-DEBUG] Raw base64 length:", imageBase64.length);
+      console.log("[OCR-DEBUG] Raw base64 first 80:", imageBase64.substring(0, 80));
+
       if (imageBase64.includes(",")) {
         imageBase64 = imageBase64.split(",")[1];
+        console.log("[OCR-DEBUG] Stripped data URI prefix, new length:", imageBase64.length);
       }
       imageBase64 = imageBase64.replace(/\s/g, "");
+      console.log("[OCR-DEBUG] After whitespace cleanup, length:", imageBase64.length);
 
       const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
       if (!apiKey) {
@@ -115,26 +120,43 @@ function parseReceiptText(text: string): {
     /^x{4,}/i,
   ];
 
+  console.log("[PARSER-DEBUG] Total lines to parse:", lines.length);
+  console.log("[PARSER-DEBUG] All lines:", JSON.stringify(lines));
+
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
 
-    if (skipPatterns.some((p) => p.test(line))) continue;
-    if (discountPattern.test(line)) continue;
+    const skipped = skipPatterns.find((p) => p.test(line));
+    if (skipped) {
+      console.log(`[PARSER-DEBUG] Line ${i} SKIPPED (pattern): "${line}"`);
+      continue;
+    }
+    if (discountPattern.test(line)) {
+      console.log(`[PARSER-DEBUG] Line ${i} SKIPPED (discount): "${line}"`);
+      continue;
+    }
 
     let price: number | null = null;
     let name = "";
 
-    for (const pattern of pricePatterns) {
-      const match = line.match(pattern);
+    for (let pi = 0; pi < pricePatterns.length; pi++) {
+      const match = line.match(pricePatterns[pi]);
       if (match) {
         price = parseFloat(match[1].replace(",", "."));
-        name = line.replace(pattern, "").replace(/\$/g, "").replace(/\s{2,}/g, " ").trim();
+        name = line.replace(pricePatterns[pi], "").replace(/\$/g, "").replace(/\s{2,}/g, " ").trim();
+        console.log(`[PARSER-DEBUG] Line ${i} PRICE MATCH (pattern ${pi}): "${line}" -> price=${price}, name="${name}"`);
         break;
       }
     }
 
-    if (price === null || price <= 0) continue;
-    if (!name && !subtotalPattern.test(line) && !taxPattern.test(line) && !totalPattern.test(line)) continue;
+    if (price === null || price <= 0) {
+      console.log(`[PARSER-DEBUG] Line ${i} SKIPPED (no price): "${line}"`);
+      continue;
+    }
+    if (!name && !subtotalPattern.test(line) && !taxPattern.test(line) && !totalPattern.test(line)) {
+      console.log(`[PARSER-DEBUG] Line ${i} SKIPPED (no name): "${line}"`);
+      continue;
+    }
 
     if (subtotalPattern.test(line)) {
       subtotal = price;
