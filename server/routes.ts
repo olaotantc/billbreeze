@@ -4,11 +4,16 @@ import { createServer, type Server } from "node:http";
 export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ocr/parse", async (req: Request, res: Response) => {
     try {
-      const { imageBase64 } = req.body;
+      let { imageBase64 } = req.body;
 
       if (!imageBase64) {
         return res.status(400).json({ error: "imageBase64 is required" });
       }
+
+      if (imageBase64.includes(",")) {
+        imageBase64 = imageBase64.split(",")[1];
+      }
+      imageBase64 = imageBase64.replace(/\s/g, "");
 
       const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
       if (!apiKey) {
@@ -24,7 +29,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             requests: [
               {
                 image: { content: imageBase64 },
-                features: [{ type: "TEXT_DETECTION", maxResults: 1 }],
+                features: [
+                  { type: "DOCUMENT_TEXT_DETECTION", maxResults: 1 },
+                  { type: "TEXT_DETECTION", maxResults: 1 },
+                ],
               },
             ],
           }),
@@ -33,23 +41,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!visionResponse.ok) {
         const errorText = await visionResponse.text();
-        console.error("Vision API error:", errorText);
+        console.error("Vision API error (status " + visionResponse.status + "):", errorText);
         return res.status(500).json({ error: "OCR service error" });
       }
 
       const visionData = await visionResponse.json() as {
         responses?: Array<{
           textAnnotations?: Array<{ description?: string }>;
+          fullTextAnnotation?: { text?: string };
           error?: { message?: string };
         }>;
       };
 
       const annotation = visionData.responses?.[0];
       if (annotation?.error) {
+        console.error("Vision annotation error:", annotation.error.message);
         return res.status(500).json({ error: annotation.error.message });
       }
 
-      const fullText = annotation?.textAnnotations?.[0]?.description || "";
+      const fullText = annotation?.fullTextAnnotation?.text || annotation?.textAnnotations?.[0]?.description || "";
       console.log("OCR raw text length:", fullText.length, "chars");
       if (fullText.length > 0) {
         console.log("OCR first 200 chars:", fullText.substring(0, 200));
