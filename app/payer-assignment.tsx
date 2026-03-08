@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
+  Alert,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -56,7 +57,30 @@ export default function PayerAssignmentScreen() {
     });
   };
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleContinue = async () => {
+    if (isSaving) return;
+
+    const unassigned = receipt.lineItems.filter((item) => (assignments[item.id] || []).length === 0);
+    if (unassigned.length > 0) {
+      Alert.alert(
+        "Unassigned Items",
+        `${unassigned.length} item${unassigned.length > 1 ? "s" : ""} ha${unassigned.length > 1 ? "ve" : "s"} no one assigned. Their cost won't be split.`,
+        [
+          { text: "Go Back", style: "cancel" },
+          { text: "Continue Anyway", onPress: () => proceedWithSave() },
+        ]
+      );
+      return;
+    }
+
+    proceedWithSave();
+  };
+
+  const proceedWithSave = async () => {
+    setIsSaving(true);
+
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -74,13 +98,14 @@ export default function PayerAssignmentScreen() {
   };
 
   const getPayerTotals = () => {
+    const roundCents = (n: number) => Math.round(n * 100) / 100;
     const totals: Record<string, number> = {};
     receipt.payers.forEach((p) => (totals[p] = 0));
 
     receipt.lineItems.forEach((item) => {
       const assignedPayers = assignments[item.id] || [];
       if (assignedPayers.length > 0) {
-        const share = item.price / assignedPayers.length;
+        const share = roundCents(item.price / assignedPayers.length);
         assignedPayers.forEach((p) => {
           totals[p] = (totals[p] || 0) + share;
         });
@@ -88,12 +113,12 @@ export default function PayerAssignmentScreen() {
     });
 
     const taxTipTotal = receipt.tax + receipt.tip;
-    const subtotal = receipt.subtotal || receipt.lineItems.reduce((s, i) => s + i.price, 0);
+    const subtotal = receipt.subtotal ?? receipt.lineItems.reduce((s, i) => s + i.price, 0);
 
     if (subtotal > 0 && taxTipTotal > 0) {
       Object.keys(totals).forEach((p) => {
         const proportion = totals[p] / subtotal;
-        totals[p] += proportion * taxTipTotal;
+        totals[p] = roundCents(totals[p] + proportion * taxTipTotal);
       });
     }
 

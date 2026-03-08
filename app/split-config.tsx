@@ -69,11 +69,16 @@ export default function SplitConfigScreen() {
     setPayers((prev) => prev.filter((p) => p !== name));
   };
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleContinue = async () => {
+    if (isSaving) return;
     if (payers.length < 2) {
       Alert.alert("Need People", "Add at least 2 people to split the bill.");
       return;
     }
+
+    setIsSaving(true);
 
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

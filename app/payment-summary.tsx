@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -41,7 +41,8 @@ function buildPaymentLinks(handles: { venmo?: string; paypal?: string; cashapp?:
 export default function PaymentSummaryScreen() {
   const insets = useSafeAreaInsets();
   const { receiptId } = useLocalSearchParams<{ receiptId: string }>();
-  const { receipts, addPaymentRequests, paymentHandles } = useApp();
+  const { receipts, addPaymentRequests, paymentRequests, paymentHandles } = useApp();
+  const [isSaving, setIsSaving] = useState(false);
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -62,16 +63,20 @@ export default function PaymentSummaryScreen() {
       breakdown[p] = { items: [], subtotal: 0, taxTip: 0, total: 0 };
     });
 
+    const roundCents = (n: number) => Math.round(n * 100) / 100;
+
     if (receipt.splitMode === "equal") {
-      const perPerson = receipt.total / receipt.payers.length;
-      receipt.payers.forEach((p) => {
-        breakdown[p].total = perPerson;
-        breakdown[p].subtotal = perPerson;
+      const baseAmount = roundCents(receipt.total / receipt.payers.length);
+      const remainder = roundCents(receipt.total - baseAmount * receipt.payers.length);
+      receipt.payers.forEach((p, i) => {
+        const amount = i === 0 ? baseAmount + remainder : baseAmount;
+        breakdown[p].total = amount;
+        breakdown[p].subtotal = amount;
       });
     } else if (receipt.splitMode === "itemized") {
       receipt.lineItems.forEach((item) => {
         if (item.assignedTo.length > 0) {
-          const share = item.price / item.assignedTo.length;
+          const share = roundCents(item.price / item.assignedTo.length);
           item.assignedTo.forEach((p) => {
             if (breakdown[p]) {
               breakdown[p].items.push({ name: item.name, amount: share });
@@ -81,15 +86,16 @@ export default function PaymentSummaryScreen() {
         }
       });
 
-      const subtotal = receipt.subtotal || receipt.lineItems.reduce((s, i) => s + i.price, 0);
+      const subtotal = receipt.subtotal ?? receipt.lineItems.reduce((s, i) => s + i.price, 0);
       const taxTipTotal = receipt.tax + receipt.tip;
 
       receipt.payers.forEach((p) => {
+        breakdown[p].subtotal = roundCents(breakdown[p].subtotal);
         if (subtotal > 0 && taxTipTotal > 0) {
           const proportion = breakdown[p].subtotal / subtotal;
-          breakdown[p].taxTip = proportion * taxTipTotal;
+          breakdown[p].taxTip = roundCents(proportion * taxTipTotal);
         }
-        breakdown[p].total = breakdown[p].subtotal + breakdown[p].taxTip;
+        breakdown[p].total = roundCents(breakdown[p].subtotal + breakdown[p].taxTip);
       });
     }
 
@@ -188,7 +194,26 @@ export default function PaymentSummaryScreen() {
     shareMessage(message, title);
   };
 
+  const existingRequests = paymentRequests.filter((r) => r.receiptId === receipt.id);
+  const hasSavedRequests = existingRequests.length > 0;
+
   const handleSaveRequests = async () => {
+    if (isSaving) return;
+
+    if (hasSavedRequests) {
+      Alert.alert(
+        "Already Saved",
+        "Payment requests for this receipt have already been saved to your inbox.",
+        [
+          { text: "View Inbox", onPress: () => router.replace("/(tabs)/inbox") },
+          { text: "OK", style: "cancel" },
+        ]
+      );
+      return;
+    }
+
+    setIsSaving(true);
+
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -197,12 +222,13 @@ export default function PaymentSummaryScreen() {
       id: generateId(),
       receiptId: receipt.id,
       payerName: payer,
-      amount: breakdown[payer]?.total || 0,
+      amount: Math.round((breakdown[payer]?.total || 0) * 100) / 100,
       status: "pending" as const,
       createdAt: new Date().toISOString(),
     }));
 
     await addPaymentRequests(requests);
+    setIsSaving(false);
     Alert.alert(
       "Requests Saved",
       `${requests.length} payment requests have been saved to your inbox.`,
@@ -330,10 +356,11 @@ export default function PaymentSummaryScreen() {
             pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
           ]}
           onPress={handleSaveRequests}
+          disabled={isSaving}
           testID="save-requests-btn"
         >
-          <Ionicons name="checkmark-circle-outline" size={22} color={Colors.white} />
-          <Text style={styles.saveButtonText}>Save Payment Requests</Text>
+          <Ionicons name={hasSavedRequests ? "checkmark-circle" : "checkmark-circle-outline"} size={22} color={Colors.white} />
+          <Text style={styles.saveButtonText}>{hasSavedRequests ? "Requests Saved" : "Save Payment Requests"}</Text>
         </Pressable>
       </View>
     </View>

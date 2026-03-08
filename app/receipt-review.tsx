@@ -122,11 +122,16 @@ export default function ReceiptReviewScreen() {
     setLineItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleContinue = async () => {
+    if (isSaving) return;
     if (lineItems.length === 0) {
       Alert.alert("No Items", "Add at least one item to continue.");
       return;
     }
+
+    setIsSaving(true);
 
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -302,6 +307,7 @@ export default function ReceiptReviewScreen() {
             pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
           ]}
           onPress={handleContinue}
+          disabled={isSaving}
           testID="continue-btn"
         >
           <Text style={styles.continueText}>Continue to Split</Text>
