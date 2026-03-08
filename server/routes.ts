@@ -4,10 +4,20 @@ import { createServer, type Server } from "node:http";
 export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ocr/parse", async (req: Request, res: Response) => {
     try {
+      if (!req.body || typeof req.body !== "object") {
+        return res.status(400).json({ error: "Request body is required with Content-Type: application/json" });
+      }
+
       let { imageBase64 } = req.body;
 
-      if (!imageBase64) {
-        return res.status(400).json({ error: "imageBase64 is required" });
+      if (!imageBase64 || typeof imageBase64 !== "string") {
+        return res.status(400).json({ error: "imageBase64 is required and must be a string" });
+      }
+
+      const base64Pattern = /^[A-Za-z0-9+/=\s]+$/;
+      const rawBase64 = imageBase64.includes(",") ? imageBase64.split(",")[1] : imageBase64;
+      if (!base64Pattern.test(rawBase64)) {
+        return res.status(400).json({ error: "imageBase64 contains invalid characters" });
       }
 
       console.log("[OCR-DEBUG] Raw base64 length:", imageBase64.length);
@@ -83,7 +93,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
-function parseReceiptText(text: string): {
+export function parseReceiptText(text: string): {
   merchantName: string;
   lineItems: Array<{ name: string; price: number }>;
   subtotal: number | null;

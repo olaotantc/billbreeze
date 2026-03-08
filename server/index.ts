@@ -1,5 +1,7 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import * as fs from "fs";
 import * as path from "path";
@@ -227,25 +229,30 @@ function setupErrorHandler(app: express.Application) {
 }
 
 (async () => {
+  app.use(helmet());
   setupCors(app);
   setupBodyParsing(app);
   setupRequestLogging(app);
 
-  configureExpoAndLanding(app);
+  const ocrLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests, please try again later" },
+  });
+  app.use("/api/ocr", ocrLimiter);
+
+  if (process.env.NODE_ENV === "production") {
+    configureExpoAndLanding(app);
+  }
 
   const server = await registerRoutes(app);
 
   setupErrorHandler(app);
 
-  const port = parseInt(process.env.PORT || "5000", 10);
-  server.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`express server serving on port ${port}`);
-    },
-  );
+  const port = parseInt(process.env.PORT || "8080", 10);
+  server.listen(port, () => {
+    log(`express server serving on port ${port}`);
+  });
 })();
