@@ -132,32 +132,37 @@ export default function ReceiptReviewScreen() {
     }
 
     setIsSaving(true);
+    try {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
 
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const receipt: Receipt = {
+        id: generateId(),
+        merchantName: merchantName || "Receipt",
+        date: "",
+        imageUri: undefined,
+        lineItems,
+        subtotal,
+        tax: parseFloat(tax) || 0,
+        tip: parseFloat(tip) || 0,
+        total,
+        splitMode: "equal",
+        payers: [],
+        createdAt: new Date().toISOString(),
+      };
+
+      await addReceipt(receipt);
+
+      router.push({
+        pathname: "/split-config",
+        params: { receiptId: receipt.id },
+      });
+    } catch (e) {
+      Alert.alert("Error", "Failed to save receipt. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
-
-    const receipt: Receipt = {
-      id: generateId(),
-      merchantName: merchantName || "Receipt",
-      date: "",
-      imageUri: undefined,
-      lineItems,
-      subtotal,
-      tax: parseFloat(tax) || 0,
-      tip: parseFloat(tip) || 0,
-      total,
-      splitMode: "equal",
-      payers: [],
-      createdAt: new Date().toISOString(),
-    };
-
-    await addReceipt(receipt);
-
-    router.push({
-      pathname: "/split-config",
-      params: { receiptId: receipt.id },
-    });
   };
 
   if (isScanning) {

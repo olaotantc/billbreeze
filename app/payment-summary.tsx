@@ -14,7 +14,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useApp } from "@/lib/app-context";
-import { formatCurrency, generateId } from "@/lib/utils";
+import { formatCurrency, generateId, roundCents } from "@/lib/utils";
 import Colors from "@/constants/colors";
 import type { PaymentRequest } from "@/shared/schema";
 
@@ -62,8 +62,6 @@ export default function PaymentSummaryScreen() {
     receipt.payers.forEach((p) => {
       breakdown[p] = { items: [], subtotal: 0, taxTip: 0, total: 0 };
     });
-
-    const roundCents = (n: number) => Math.round(n * 100) / 100;
 
     if (receipt.splitMode === "equal") {
       const baseAmount = roundCents(receipt.total / receipt.payers.length);

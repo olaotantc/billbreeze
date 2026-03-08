@@ -7,7 +7,7 @@ A bill-splitting mobile app built with Expo/React Native. Users scan receipts vi
 - **Frontend**: Expo 54, React Native 0.81, TypeScript, Expo Router (file-based)
 - **State**: React Context (`lib/app-context.tsx`) + AsyncStorage for persistence
 - **Queries**: TanStack React Query v5 (retry disabled)
-- **Backend**: Express.js on port 5000
+- **Backend**: Express.js on port 8080
 - **OCR**: Google Cloud Vision API (DOCUMENT_TEXT_DETECTION)
 - **Database**: Drizzle ORM + PostgreSQL configured but **not actively used** - all data in AsyncStorage
 - **Validation**: Zod schemas in `shared/schema.ts`
@@ -68,7 +68,7 @@ constants/
 
 ## Development Commands
 - `npm run start` - Expo dev server
-- `npm run server:dev` - Express backend (port 5000)
+- `npm run server:dev` - Express backend (port 8080)
 - `npm run db:push` - Drizzle schema push (unused)
 - `npm run lint` / `npm run lint:fix` - ESLint
 
@@ -78,7 +78,7 @@ constants/
 - Color tokens in `constants/colors.ts` - never use raw hex in screens
 - Inter font family loaded via `@expo-google-fonts/inter`
 - Error boundaries at app root; use `Alert.alert()` for user-facing errors
-- No tests exist yet - be cautious with refactors
+- OCR parser has a 52-case test suite; other areas lack tests, so be cautious with refactors
 
 ## Known Limitations
 - All data is local-only (AsyncStorage) - lost on uninstall

@@ -91,7 +91,7 @@ Camera/Gallery -> JPEG base64 -> POST /api/ocr/parse -> Google Vision API
 4. **OCR accuracy** - Regex parser may miss items with unusual formatting; no confidence scores
 5. **No error telemetry** - Errors logged to console only
 6. **CORS overly permissive** - Allows `localhost:*` in development
-7. **No API rate limiting** - OCR endpoint has no throttling
+7. **Basic API rate limiting only** - 10 req/min on `/api/ocr`; needs tuning/expansion for production
 
 ### Minor
 8. **Unused Drizzle setup** - Technical debt; configured but never used
@@ -106,7 +106,7 @@ Camera/Gallery -> JPEG base64 -> POST /api/ocr/parse -> Google Vision API
 - **API endpoints**: 1 (POST /api/ocr/parse)
 - **Components**: 3 reusable (ErrorBoundary, ErrorFallback, KeyboardAwareScrollViewCompat)
 - **Dependencies**: 38 production, 8 dev
-- **Test coverage**: 0% (no tests)
+- **Test coverage**: minimal (52-case OCR parser test suite in `tests/parser.test.ts`)
 
 ---
 

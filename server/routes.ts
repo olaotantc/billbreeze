@@ -14,19 +14,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "imageBase64 is required and must be a string" });
       }
 
-      const base64Pattern = /^[A-Za-z0-9+/=\s]+$/;
-      const rawBase64 = imageBase64.includes(",") ? imageBase64.split(",")[1] : imageBase64;
-      if (!base64Pattern.test(rawBase64)) {
-        return res.status(400).json({ error: "imageBase64 contains invalid characters" });
-      }
-
       console.log("[OCR-DEBUG] Raw base64 length:", imageBase64.length);
       console.log("[OCR-DEBUG] Raw base64 first 80:", imageBase64.substring(0, 80));
 
+      // Strip data URI prefix if present
       if (imageBase64.includes(",")) {
         imageBase64 = imageBase64.split(",")[1];
         console.log("[OCR-DEBUG] Stripped data URI prefix, new length:", imageBase64.length);
       }
+
+      const base64Pattern = /^[A-Za-z0-9+/=\s]+$/;
+      if (!base64Pattern.test(imageBase64)) {
+        return res.status(400).json({ error: "imageBase64 contains invalid characters" });
+      }
+
       imageBase64 = imageBase64.replace(/\s/g, "");
       console.log("[OCR-DEBUG] After whitespace cleanup, length:", imageBase64.length);
 

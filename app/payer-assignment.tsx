@@ -13,7 +13,7 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useApp } from "@/lib/app-context";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, roundCents } from "@/lib/utils";
 import Colors from "@/constants/colors";
 import type { LineItem } from "@/shared/schema";
 
@@ -80,25 +80,29 @@ export default function PayerAssignmentScreen() {
 
   const proceedWithSave = async () => {
     setIsSaving(true);
+    try {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
 
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const updatedItems = receipt.lineItems.map((item) => ({
+        ...item,
+        assignedTo: assignments[item.id] || [],
+      }));
+
+      await updateReceipt({ ...receipt, lineItems: updatedItems });
+      router.push({
+        pathname: "/payment-summary",
+        params: { receiptId: receipt.id },
+      });
+    } catch (e) {
+      Alert.alert("Error", "Failed to save assignments. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
-
-    const updatedItems = receipt.lineItems.map((item) => ({
-      ...item,
-      assignedTo: assignments[item.id] || [],
-    }));
-
-    await updateReceipt({ ...receipt, lineItems: updatedItems });
-    router.push({
-      pathname: "/payment-summary",
-      params: { receiptId: receipt.id },
-    });
   };
 
   const getPayerTotals = () => {
-    const roundCents = (n: number) => Math.round(n * 100) / 100;
     const totals: Record<string, number> = {};
     receipt.payers.forEach((p) => (totals[p] = 0));
 
@@ -202,6 +206,7 @@ export default function PayerAssignmentScreen() {
             pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
           ]}
           onPress={handleContinue}
+          disabled={isSaving}
           testID="assignment-continue-btn"
         >
           <Text style={styles.continueText}>View Summary</Text>

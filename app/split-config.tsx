@@ -79,32 +79,37 @@ export default function SplitConfigScreen() {
     }
 
     setIsSaving(true);
+    try {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
 
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
+      const updated = {
+        ...receipt,
+        splitMode,
+        payers,
+        tax: includeTax ? receipt.tax : 0,
+        tip: includeTip ? receipt.tip : 0,
+        total: effectiveTotal,
+      };
 
-    const updated = {
-      ...receipt,
-      splitMode,
-      payers,
-      tax: includeTax ? receipt.tax : 0,
-      tip: includeTip ? receipt.tip : 0,
-      total: effectiveTotal,
-    };
+      await updateReceipt(updated);
 
-    await updateReceipt(updated);
-
-    if (splitMode === "itemized") {
-      router.push({
-        pathname: "/payer-assignment",
-        params: { receiptId: receipt.id },
-      });
-    } else {
-      router.push({
-        pathname: "/payment-summary",
-        params: { receiptId: receipt.id },
-      });
+      if (splitMode === "itemized") {
+        router.push({
+          pathname: "/payer-assignment",
+          params: { receiptId: receipt.id },
+        });
+      } else {
+        router.push({
+          pathname: "/payment-summary",
+          params: { receiptId: receipt.id },
+        });
+      }
+    } catch (e) {
+      Alert.alert("Error", "Failed to save split configuration. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -258,7 +263,7 @@ export default function SplitConfigScreen() {
             payers.length < 2 && styles.continueDisabled,
           ]}
           onPress={handleContinue}
-          disabled={payers.length < 2}
+          disabled={payers.length < 2 || isSaving}
           testID="split-continue-btn"
         >
           <Text
