@@ -2,6 +2,10 @@ export function generateId(): string {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
 }
 
+export function roundCents(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 export function formatCurrency(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }

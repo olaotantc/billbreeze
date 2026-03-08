@@ -122,37 +122,47 @@ export default function ReceiptReviewScreen() {
     setLineItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleContinue = async () => {
+    if (isSaving) return;
     if (lineItems.length === 0) {
       Alert.alert("No Items", "Add at least one item to continue.");
       return;
     }
 
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsSaving(true);
+    try {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+
+      const receipt: Receipt = {
+        id: generateId(),
+        merchantName: merchantName || "Receipt",
+        date: "",
+        imageUri: undefined,
+        lineItems,
+        subtotal,
+        tax: parseFloat(tax) || 0,
+        tip: parseFloat(tip) || 0,
+        total,
+        splitMode: "equal",
+        payers: [],
+        createdAt: new Date().toISOString(),
+      };
+
+      await addReceipt(receipt);
+
+      router.push({
+        pathname: "/split-config",
+        params: { receiptId: receipt.id },
+      });
+    } catch (e) {
+      Alert.alert("Error", "Failed to save receipt. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
-
-    const receipt: Receipt = {
-      id: generateId(),
-      merchantName: merchantName || "Receipt",
-      date: "",
-      imageUri: undefined,
-      lineItems,
-      subtotal,
-      tax: parseFloat(tax) || 0,
-      tip: parseFloat(tip) || 0,
-      total,
-      splitMode: "equal",
-      payers: [],
-      createdAt: new Date().toISOString(),
-    };
-
-    await addReceipt(receipt);
-
-    router.push({
-      pathname: "/split-config",
-      params: { receiptId: receipt.id },
-    });
   };
 
   if (isScanning) {
@@ -302,6 +312,7 @@ export default function ReceiptReviewScreen() {
             pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
           ]}
           onPress={handleContinue}
+          disabled={isSaving}
           testID="continue-btn"
         >
           <Text style={styles.continueText}>Continue to Split</Text>

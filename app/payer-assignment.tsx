@@ -6,13 +6,14 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
+  Alert,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useApp } from "@/lib/app-context";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, roundCents } from "@/lib/utils";
 import Colors from "@/constants/colors";
 import type { LineItem } from "@/shared/schema";
 
@@ -56,21 +57,49 @@ export default function PayerAssignmentScreen() {
     });
   };
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleContinue = async () => {
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isSaving) return;
+
+    const unassigned = receipt.lineItems.filter((item) => (assignments[item.id] || []).length === 0);
+    if (unassigned.length > 0) {
+      Alert.alert(
+        "Unassigned Items",
+        `${unassigned.length} item${unassigned.length > 1 ? "s" : ""} ha${unassigned.length > 1 ? "ve" : "s"} no one assigned. Their cost won't be split.`,
+        [
+          { text: "Go Back", style: "cancel" },
+          { text: "Continue Anyway", onPress: () => proceedWithSave() },
+        ]
+      );
+      return;
     }
 
-    const updatedItems = receipt.lineItems.map((item) => ({
-      ...item,
-      assignedTo: assignments[item.id] || [],
-    }));
+    proceedWithSave();
+  };
 
-    await updateReceipt({ ...receipt, lineItems: updatedItems });
-    router.push({
-      pathname: "/payment-summary",
-      params: { receiptId: receipt.id },
-    });
+  const proceedWithSave = async () => {
+    setIsSaving(true);
+    try {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+
+      const updatedItems = receipt.lineItems.map((item) => ({
+        ...item,
+        assignedTo: assignments[item.id] || [],
+      }));
+
+      await updateReceipt({ ...receipt, lineItems: updatedItems });
+      router.push({
+        pathname: "/payment-summary",
+        params: { receiptId: receipt.id },
+      });
+    } catch (e) {
+      Alert.alert("Error", "Failed to save assignments. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const getPayerTotals = () => {
@@ -80,7 +109,7 @@ export default function PayerAssignmentScreen() {
     receipt.lineItems.forEach((item) => {
       const assignedPayers = assignments[item.id] || [];
       if (assignedPayers.length > 0) {
-        const share = item.price / assignedPayers.length;
+        const share = roundCents(item.price / assignedPayers.length);
         assignedPayers.forEach((p) => {
           totals[p] = (totals[p] || 0) + share;
         });
@@ -88,12 +117,12 @@ export default function PayerAssignmentScreen() {
     });
 
     const taxTipTotal = receipt.tax + receipt.tip;
-    const subtotal = receipt.subtotal || receipt.lineItems.reduce((s, i) => s + i.price, 0);
+    const subtotal = receipt.subtotal ?? receipt.lineItems.reduce((s, i) => s + i.price, 0);
 
     if (subtotal > 0 && taxTipTotal > 0) {
       Object.keys(totals).forEach((p) => {
         const proportion = totals[p] / subtotal;
-        totals[p] += proportion * taxTipTotal;
+        totals[p] = roundCents(totals[p] + proportion * taxTipTotal);
       });
     }
 
@@ -177,6 +206,7 @@ export default function PayerAssignmentScreen() {
             pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
           ]}
           onPress={handleContinue}
+          disabled={isSaving}
           testID="assignment-continue-btn"
         >
           <Text style={styles.continueText}>View Summary</Text>
