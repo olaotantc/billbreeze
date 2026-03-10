@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -42,6 +43,7 @@ export default function ReceiptReviewScreen() {
   const total = subtotal + (parseFloat(tax) || 0) + (parseFloat(tip) || 0);
 
   const hasInitialized = React.useRef(false);
+  const abortRef = React.useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (hasInitialized.current) return;
@@ -62,7 +64,6 @@ export default function ReceiptReviewScreen() {
       hasInitialized.current = true;
       const b64 = pendingImage.base64;
       console.log("[OCR-DEBUG] pendingImage base64 length:", b64.length);
-      setPendingImage(null);
       scanReceipt(b64);
     } else if (!pendingImage && !receiptId) {
       hasInitialized.current = true;
@@ -78,6 +79,7 @@ export default function ReceiptReviewScreen() {
       const url = new URL("/api/ocr/parse", baseUrl);
       console.log("[OCR-DEBUG] Full request URL:", url.toString());
       const controller = new AbortController();
+      abortRef.current = controller;
       const timeout = setTimeout(() => controller.abort(), 30000);
       const response = await fetch(url.toString(), {
         method: "POST",
@@ -107,8 +109,10 @@ export default function ReceiptReviewScreen() {
           const diff = data.total - data.subtotal - (data.tax || 0);
           if (diff > 0) setTip(diff.toFixed(2));
         }
+        setPendingImage(null);
         setScanComplete(true);
       } else {
+        setPendingImage(null);
         setScanComplete(true);
         Alert.alert(
           "Scan Issue",
@@ -143,7 +147,7 @@ export default function ReceiptReviewScreen() {
       prev.map((item) => {
         if (item.id !== id) return item;
         if (field === "name") return { ...item, name: value };
-        return { ...item, price: parseFloat(value) || 0 };
+        return { ...item, price: Math.max(0, parseFloat(value) || 0) };
       })
     );
   };
@@ -177,6 +181,8 @@ export default function ReceiptReviewScreen() {
         subtotal,
         tax: parseFloat(tax) || 0,
         tip: parseFloat(tip) || 0,
+        includeTax: existingReceipt?.includeTax !== false,
+        includeTip: existingReceipt?.includeTip !== false,
         total,
         splitMode: existingReceipt?.splitMode || "equal",
         payers: existingReceipt?.payers || [],
@@ -209,13 +215,30 @@ export default function ReceiptReviewScreen() {
           <Text style={styles.scanningText}>
             Extracting items and prices...
           </Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.cancelButton,
+              pressed && { opacity: 0.7 },
+            ]}
+            onPress={() => {
+              abortRef.current?.abort();
+              setPendingImage(null);
+              setIsScanning(false);
+              setScanComplete(true);
+            }}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </Pressable>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: topInset }]}>
+    <KeyboardAvoidingView
+      style={[styles.container, { paddingTop: topInset }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <View style={styles.header}>
         <Pressable style={styles.navButton} onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={Colors.text} />
@@ -277,7 +300,7 @@ export default function ReceiptReviewScreen() {
                   style={styles.itemPriceInput}
                   placeholder="0.00"
                   placeholderTextColor={Colors.textTertiary}
-                  value={item.price > 0 ? item.price.toString() : ""}
+                  value={item.price > 0 ? item.price.toFixed(2) : ""}
                   onChangeText={(v) => updateItem(item.id, "price", v)}
                   keyboardType="decimal-pad"
                 />
@@ -353,11 +376,11 @@ export default function ReceiptReviewScreen() {
           disabled={isSaving}
           testID="continue-btn"
         >
-          <Text style={styles.continueText}>Continue to Split</Text>
-          <Feather name="arrow-right" size={20} color={Colors.white} />
+          <Text style={styles.continueText}>{isSaving ? "Saving..." : "Continue to Split"}</Text>
+          {!isSaving && <Feather name="arrow-right" size={20} color={Colors.white} />}
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -385,6 +408,19 @@ const styles = StyleSheet.create({
   scanningText: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+  },
+  cancelButton: {
+    marginTop: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
     color: Colors.textSecondary,
   },
   header: {
@@ -508,8 +544,8 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   removeButton: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
   },

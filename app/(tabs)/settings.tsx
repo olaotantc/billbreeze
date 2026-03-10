@@ -64,11 +64,15 @@ export default function SettingsScreen() {
         text: "Sign Out",
         style: "destructive",
         onPress: async () => {
-          if (Platform.OS !== "web") {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          try {
+            if (Platform.OS !== "web") {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }
+            await signOut();
+            router.replace("/");
+          } catch (e) {
+            Alert.alert("Error", "Failed to sign out. Please try again.");
           }
-          await signOut();
-          router.replace("/");
         },
       },
     ]);
@@ -190,9 +194,9 @@ export default function SettingsScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>General</Text>
-          <SettingRow icon="info" label="About BillBreeze" />
-          <SettingRow icon="shield" label="Privacy" />
-          <SettingRow icon="help-circle" label="Help & Support" />
+          <SettingRow icon="info" label="About BillBreeze" subtitle="Coming soon" />
+          <SettingRow icon="shield" label="Privacy" subtitle="Coming soon" />
+          <SettingRow icon="help-circle" label="Help & Support" subtitle="Coming soon" />
         </View>
 
         <View style={styles.section}>
@@ -215,20 +219,19 @@ export default function SettingsScreen() {
   );
 }
 
-function SettingRow({ icon, label }: { icon: string; label: string }) {
+function SettingRow({ icon, label, subtitle }: { icon: string; label: string; subtitle?: string }) {
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.settingRow,
-        pressed && { opacity: 0.7 },
-      ]}
-    >
+    <View style={styles.settingRow}>
       <View style={styles.settingRowLeft}>
         <Feather name={icon as any} size={18} color={Colors.textSecondary} />
         <Text style={styles.settingLabel}>{label}</Text>
       </View>
-      <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
-    </Pressable>
+      {subtitle ? (
+        <Text style={styles.settingSubtitle}>{subtitle}</Text>
+      ) : (
+        <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
+      )}
+    </View>
   );
 }
 
@@ -385,6 +388,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_500Medium",
     color: Colors.text,
+  },
+  settingSubtitle: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textTertiary,
   },
   signOutButton: {
     flexDirection: "row",

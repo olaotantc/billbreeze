@@ -72,7 +72,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const annotation = visionData.responses?.[0];
       if (annotation?.error) {
         console.error("Vision annotation error:", annotation.error.message);
-        return res.status(500).json({ error: annotation.error.message });
+        return res.status(500).json({ error: "OCR processing failed" });
       }
 
       const fullText = annotation?.fullTextAnnotation?.text || annotation?.textAnnotations?.[0]?.description || "";

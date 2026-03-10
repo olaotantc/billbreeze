@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -39,6 +39,9 @@ export default function PayerAssignmentScreen() {
   if (!receipt) {
     return (
       <View style={[styles.container, { paddingTop: topInset }]}>
+        <Pressable style={styles.navButton} onPress={() => router.back()}>
+          <Feather name="arrow-left" size={22} color={Colors.text} />
+        </Pressable>
         <Text style={styles.errorText}>Receipt not found</Text>
       </View>
     );
@@ -117,7 +120,9 @@ export default function PayerAssignmentScreen() {
       }
     });
 
-    const taxTipTotal = receipt.tax + receipt.tip;
+    const effectiveTax = receipt.includeTax !== false ? receipt.tax : 0;
+    const effectiveTip = receipt.includeTip !== false ? receipt.tip : 0;
+    const taxTipTotal = effectiveTax + effectiveTip;
     const subtotal = receipt.subtotal ?? receipt.lineItems.reduce((s, i) => s + i.price, 0);
 
     if (subtotal > 0 && taxTipTotal > 0) {
@@ -138,7 +143,7 @@ export default function PayerAssignmentScreen() {
     return totals;
   };
 
-  const payerTotals = getPayerTotals();
+  const payerTotals = useMemo(() => getPayerTotals(), [assignments, receipt]);
 
   return (
     <View style={[styles.container, { paddingTop: topInset }]}>
@@ -218,8 +223,8 @@ export default function PayerAssignmentScreen() {
           disabled={isSaving}
           testID="assignment-continue-btn"
         >
-          <Text style={styles.continueText}>View Summary</Text>
-          <Feather name="arrow-right" size={20} color={Colors.white} />
+          <Text style={styles.continueText}>{isSaving ? "Saving..." : "View Summary"}</Text>
+          {!isSaving && <Feather name="arrow-right" size={20} color={Colors.white} />}
         </Pressable>
       </View>
     </View>

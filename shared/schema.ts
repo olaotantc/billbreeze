@@ -18,6 +18,8 @@ export const receiptSchema = z.object({
   subtotal: z.number().default(0),
   tax: z.number().default(0),
   tip: z.number().default(0),
+  includeTax: z.boolean().default(true),
+  includeTip: z.boolean().default(true),
   total: z.number().default(0),
   splitMode: z.enum(["equal", "itemized", "fixed"]).default("equal"),
   payers: z.array(z.string()).default([]),

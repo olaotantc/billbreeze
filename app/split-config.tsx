@@ -34,12 +34,15 @@ export default function SplitConfigScreen() {
   );
   const [payers, setPayers] = useState<string[]>(receipt?.payers || []);
   const [newPayer, setNewPayer] = useState("");
-  const [includeTax, setIncludeTax] = useState(true);
-  const [includeTip, setIncludeTip] = useState(true);
+  const [includeTax, setIncludeTax] = useState(receipt?.includeTax !== false);
+  const [includeTip, setIncludeTip] = useState(receipt?.includeTip !== false);
 
   if (!receipt) {
     return (
       <View style={[styles.container, { paddingTop: topInset }]}>
+        <Pressable style={styles.navButton} onPress={() => router.back()}>
+          <Feather name="arrow-left" size={22} color={Colors.text} />
+        </Pressable>
         <Text style={styles.errorText}>Receipt not found</Text>
       </View>
     );
@@ -55,7 +58,7 @@ export default function SplitConfigScreen() {
   const addPayer = () => {
     const name = newPayer.trim();
     if (!name) return;
-    if (payers.includes(name)) {
+    if (payers.some((p) => p.toLowerCase() === name.toLowerCase())) {
       Alert.alert("Duplicate", "This person is already added.");
       return;
     }
@@ -89,8 +92,8 @@ export default function SplitConfigScreen() {
         ...receipt,
         splitMode,
         payers,
-        tax: includeTax ? receipt.tax : 0,
-        tip: includeTip ? receipt.tip : 0,
+        includeTax,
+        includeTip,
         total: effectiveTotal,
       };
 
@@ -504,8 +507,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   payerRemove: {
-    width: 28,
-    height: 28,
+    width: 44,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
   },

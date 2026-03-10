@@ -107,7 +107,7 @@ export default function HomeScreen() {
           pressed && { opacity: 0.7 },
         ]}
         onPress={() => handleDelete(item.id)}
-        hitSlop={4}
+        hitSlop={12}
       >
         <Feather name="trash-2" size={16} color={Colors.textTertiary} />
       </Pressable>

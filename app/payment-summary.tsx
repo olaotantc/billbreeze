@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -51,6 +51,9 @@ export default function PaymentSummaryScreen() {
   if (!receipt) {
     return (
       <View style={[styles.container, { paddingTop: topInset }]}>
+        <Pressable style={styles.navButton} onPress={() => router.back()}>
+          <Feather name="arrow-left" size={22} color={Colors.text} />
+        </Pressable>
         <Text style={styles.errorText}>Receipt not found</Text>
       </View>
     );
@@ -87,7 +90,9 @@ export default function PaymentSummaryScreen() {
       });
 
       const subtotal = receipt.subtotal ?? receipt.lineItems.reduce((s, i) => s + i.price, 0);
-      const taxTipTotal = receipt.tax + receipt.tip;
+      const effectiveTax = receipt.includeTax !== false ? receipt.tax : 0;
+      const effectiveTip = receipt.includeTip !== false ? receipt.tip : 0;
+      const taxTipTotal = effectiveTax + effectiveTip;
 
       receipt.payers.forEach((p) => {
         breakdown[p].subtotal = roundCents(breakdown[p].subtotal);
@@ -115,7 +120,7 @@ export default function PaymentSummaryScreen() {
     return breakdown;
   };
 
-  const breakdown = getPayerBreakdown();
+  const breakdown = useMemo(() => getPayerBreakdown(), [receipt]);
 
   const hasPaymentHandles = !!(paymentHandles.venmo || paymentHandles.paypal || paymentHandles.cashapp);
 
@@ -226,36 +231,40 @@ export default function PaymentSummaryScreen() {
     }
 
     setIsSaving(true);
+    try {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
 
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const requests: PaymentRequest[] = receipt.payers.map((payer) => ({
+        id: generateId(),
+        receiptId: receipt.id,
+        payerName: payer,
+        amount: Math.round((breakdown[payer]?.total || 0) * 100) / 100,
+        status: "pending" as const,
+        createdAt: new Date().toISOString(),
+      }));
+
+      await addPaymentRequests(requests);
+      Alert.alert(
+        "Requests Saved",
+        `${requests.length} payment requests have been saved to your inbox.`,
+        [
+          {
+            text: "View Inbox",
+            onPress: () => router.replace("/(tabs)/inbox"),
+          },
+          {
+            text: "Done",
+            onPress: () => router.replace("/(tabs)"),
+          },
+        ]
+      );
+    } catch (e) {
+      Alert.alert("Error", "Failed to save payment requests. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
-
-    const requests: PaymentRequest[] = receipt.payers.map((payer) => ({
-      id: generateId(),
-      receiptId: receipt.id,
-      payerName: payer,
-      amount: Math.round((breakdown[payer]?.total || 0) * 100) / 100,
-      status: "pending" as const,
-      createdAt: new Date().toISOString(),
-    }));
-
-    await addPaymentRequests(requests);
-    setIsSaving(false);
-    Alert.alert(
-      "Requests Saved",
-      `${requests.length} payment requests have been saved to your inbox.`,
-      [
-        {
-          text: "View Inbox",
-          onPress: () => router.replace("/(tabs)/inbox"),
-        },
-        {
-          text: "Done",
-          onPress: () => router.replace("/(tabs)"),
-        },
-      ]
-    );
   };
 
   return (
@@ -373,7 +382,7 @@ export default function PaymentSummaryScreen() {
           testID="save-requests-btn"
         >
           <Ionicons name={hasSavedRequests ? "checkmark-circle" : "checkmark-circle-outline"} size={22} color={Colors.white} />
-          <Text style={styles.saveButtonText}>{hasSavedRequests ? "Requests Saved" : "Save Payment Requests"}</Text>
+          <Text style={styles.saveButtonText}>{isSaving ? "Saving..." : hasSavedRequests ? "Requests Saved" : "Save Payment Requests"}</Text>
         </Pressable>
       </View>
     </View>

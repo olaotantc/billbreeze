@@ -50,6 +50,8 @@ export async function getReceipts(): Promise<Receipt[]> {
   return receipts.map((r) => ({
     ...r,
     currency: r.currency || "$",
+    includeTax: r.includeTax !== false,
+    includeTip: r.includeTip !== false,
     lineItems: (r.lineItems || []).map((item) => ({
       ...item,
       quantity: item.quantity || 1,
