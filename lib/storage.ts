@@ -46,7 +46,16 @@ export async function clearUser(): Promise<void> {
 
 export async function getReceipts(): Promise<Receipt[]> {
   const data = await AsyncStorage.getItem(RECEIPTS_KEY);
-  return safeParse(data, []);
+  const receipts = safeParse<Receipt[]>(data, []);
+  return receipts.map((r) => ({
+    ...r,
+    currency: r.currency || "$",
+    lineItems: (r.lineItems || []).map((item) => ({
+      ...item,
+      quantity: item.quantity || 1,
+      assignedTo: item.assignedTo || [],
+    })),
+  }));
 }
 
 export async function saveReceipt(receipt: Receipt): Promise<void> {

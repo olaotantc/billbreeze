@@ -74,9 +74,11 @@ export default function PaymentSummaryScreen() {
     } else if (receipt.splitMode === "itemized") {
       receipt.lineItems.forEach((item) => {
         if (item.assignedTo.length > 0) {
-          const share = roundCents(item.price / item.assignedTo.length);
-          item.assignedTo.forEach((p) => {
+          const baseShare = roundCents(item.price / item.assignedTo.length);
+          const remainder = roundCents(item.price - baseShare * item.assignedTo.length);
+          item.assignedTo.forEach((p, i) => {
             if (breakdown[p]) {
+              const share = i === 0 ? baseShare + remainder : baseShare;
               breakdown[p].items.push({ name: item.name, amount: share });
               breakdown[p].subtotal += share;
             }

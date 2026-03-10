@@ -225,10 +225,34 @@ export function parseReceiptText(text: string): {
   };
 
   const cleanItemName = (name: string): { name: string; quantity: number } => {
-    const qtyMatch = name.match(/^(\d+)\s*[xX@]\s*/);
-    const quantity = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
-    const cleaned = name
-      .replace(/^\d+\s*[xX@]\s*/, "")
+    let quantity = 1;
+    let cleaned = name;
+
+    // "2x Cheeseburger", "3X Latte", "2@ Coffee"
+    const prefixWithSep = cleaned.match(/^(\d+)\s*[xX@]\s+(.+)/);
+    if (prefixWithSep) {
+      quantity = parseInt(prefixWithSep[1], 10);
+      cleaned = prefixWithSep[2];
+    } else {
+      // "2 Cheeseburger" — bare number prefix followed by space then text starting with a letter
+      const barePrefix = cleaned.match(/^(\d+)\s+([A-Za-z].+)/);
+      if (barePrefix && parseInt(barePrefix[1], 10) <= 50) {
+        quantity = parseInt(barePrefix[1], 10);
+        cleaned = barePrefix[2];
+      }
+    }
+
+    // Trailing "x2", "x 3", "X2"
+    const trailMatch = cleaned.match(/^(.+?)\s*[xX]\s*(\d+)\s*$/);
+    if (trailMatch && quantity === 1) {
+      const trailQty = parseInt(trailMatch[2], 10);
+      if (trailQty <= 50) {
+        quantity = trailQty;
+        cleaned = trailMatch[1];
+      }
+    }
+
+    cleaned = cleaned
       .replace(/[$€£¥₦₹₩₵][\d.,]+/g, "")
       .replace(/\s{2,}/g, " ")
       .trim();

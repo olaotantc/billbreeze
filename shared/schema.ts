@@ -38,6 +38,7 @@ export const ocrResponseSchema = z.object({
   currency: z.string().default("$"),
   lineItems: z.array(z.object({
     name: z.string(),
+    quantity: z.number().default(1),
     price: z.number(),
   })),
   subtotal: z.number().optional(),
