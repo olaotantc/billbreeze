@@ -91,10 +91,23 @@ export default function PaymentSummaryScreen() {
 
       receipt.payers.forEach((p) => {
         breakdown[p].subtotal = roundCents(breakdown[p].subtotal);
-        if (subtotal > 0 && taxTipTotal > 0) {
-          const proportion = breakdown[p].subtotal / subtotal;
-          breakdown[p].taxTip = roundCents(proportion * taxTipTotal);
-        }
+      });
+
+      if (subtotal > 0 && taxTipTotal > 0) {
+        let taxTipDistributed = 0;
+        receipt.payers.forEach((p, i) => {
+          if (i < receipt.payers.length - 1) {
+            const proportion = breakdown[p].subtotal / subtotal;
+            breakdown[p].taxTip = roundCents(proportion * taxTipTotal);
+            taxTipDistributed += breakdown[p].taxTip;
+          } else {
+            // Last payer gets the remainder to ensure exact sum
+            breakdown[p].taxTip = roundCents(taxTipTotal - taxTipDistributed);
+          }
+        });
+      }
+
+      receipt.payers.forEach((p) => {
         breakdown[p].total = roundCents(breakdown[p].subtotal + breakdown[p].taxTip);
       });
     }

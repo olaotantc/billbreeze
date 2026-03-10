@@ -41,9 +41,14 @@ export default function ReceiptReviewScreen() {
   const subtotal = lineItems.reduce((sum, item) => sum + item.price, 0);
   const total = subtotal + (parseFloat(tax) || 0) + (parseFloat(tip) || 0);
 
+  const hasInitialized = React.useRef(false);
+
   useEffect(() => {
+    if (hasInitialized.current) return;
+
     // Loading an existing receipt
     if (existingReceipt) {
+      hasInitialized.current = true;
       setMerchantName(existingReceipt.merchantName || "");
       setCurrency(existingReceipt.currency || "$");
       setLineItems(existingReceipt.lineItems || []);
@@ -54,14 +59,16 @@ export default function ReceiptReviewScreen() {
     }
     // New scan flow
     if (pendingImage?.base64) {
+      hasInitialized.current = true;
       const b64 = pendingImage.base64;
       console.log("[OCR-DEBUG] pendingImage base64 length:", b64.length);
       setPendingImage(null);
       scanReceipt(b64);
-    } else if (!pendingImage) {
+    } else if (!pendingImage && !receiptId) {
+      hasInitialized.current = true;
       setScanComplete(true);
     }
-  }, []);
+  }, [existingReceipt, pendingImage]);
 
   const scanReceipt = async (base64: string) => {
     setIsScanning(true);
