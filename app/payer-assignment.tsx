@@ -148,7 +148,7 @@ export default function PayerAssignmentScreen() {
               {payer}
             </Text>
             <Text style={styles.payerSummaryAmount}>
-              {formatCurrency(payerTotals[payer] || 0)}
+              {formatCurrency(payerTotals[payer] || 0, receipt.currency)}
             </Text>
           </View>
         ))}
@@ -165,7 +165,7 @@ export default function PayerAssignmentScreen() {
               <Text style={styles.itemName} numberOfLines={1}>
                 {item.name || "Unnamed Item"}
               </Text>
-              <Text style={styles.itemPrice}>{formatCurrency(item.price)}</Text>
+              <Text style={styles.itemPrice}>{formatCurrency(item.price, receipt.currency)}</Text>
             </View>
             <View style={styles.payerButtons}>
               {receipt.payers.map((payer) => {

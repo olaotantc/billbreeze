@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Platform,
   Alert,
+  KeyboardAvoidingView,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -114,7 +115,10 @@ export default function SplitConfigScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: topInset }]}>
+    <KeyboardAvoidingView
+      style={[styles.container, { paddingTop: topInset }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <View style={styles.header}>
         <Pressable style={styles.navButton} onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={Colors.text} />
@@ -131,12 +135,24 @@ export default function SplitConfigScreen() {
       >
         <View style={styles.totalCard}>
           <Text style={styles.totalLabel}>Total to Split</Text>
-          <Text style={styles.totalAmount}>{formatCurrency(effectiveTotal)}</Text>
+          <Text style={styles.totalAmount}>{formatCurrency(effectiveTotal, receipt.currency)}</Text>
           <Text style={styles.totalBreakdown}>
             {receipt.lineItems.length} items
-            {includeTax && receipt.tax > 0 ? ` + ${formatCurrency(receipt.tax)} tax` : ""}
-            {includeTip && receipt.tip > 0 ? ` + ${formatCurrency(receipt.tip)} tip` : ""}
+            {includeTax && receipt.tax > 0 ? ` + ${formatCurrency(receipt.tax, receipt.currency)} tax` : ""}
+            {includeTip && receipt.tip > 0 ? ` + ${formatCurrency(receipt.tip, receipt.currency)} tip` : ""}
           </Text>
+          {receipt.lineItems.length > 0 && (
+            <View style={styles.itemBreakdown}>
+              {receipt.lineItems.map((item) => (
+                <View key={item.id} style={styles.itemBreakdownRow}>
+                  <Text style={styles.itemBreakdownName} numberOfLines={1}>
+                    {(item.quantity || 1) > 1 ? `${item.quantity}x ` : ""}{item.name}
+                  </Text>
+                  <Text style={styles.itemBreakdownPrice}>{formatCurrency(item.price, receipt.currency)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -177,7 +193,7 @@ export default function SplitConfigScreen() {
           <Text style={styles.sectionTitle}>Include</Text>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleLabel}>
-              Tax ({formatCurrency(receipt.tax)})
+              Tax ({formatCurrency(receipt.tax, receipt.currency)})
             </Text>
             <Pressable
               style={[styles.toggle, includeTax && styles.toggleActive]}
@@ -193,7 +209,7 @@ export default function SplitConfigScreen() {
           </View>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleLabel}>
-              Tip ({formatCurrency(receipt.tip)})
+              Tip ({formatCurrency(receipt.tip, receipt.currency)})
             </Text>
             <Pressable
               style={[styles.toggle, includeTip && styles.toggleActive]}
@@ -240,7 +256,7 @@ export default function SplitConfigScreen() {
                 <Text style={styles.payerChipText}>{payer}</Text>
                 {splitMode === "equal" && payers.length > 0 && (
                   <Text style={styles.payerAmount}>
-                    {formatCurrency(perPerson)}
+                    {formatCurrency(perPerson, receipt.currency)}
                   </Text>
                 )}
                 <Pressable
@@ -281,7 +297,7 @@ export default function SplitConfigScreen() {
           />
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -344,6 +360,31 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: "rgba(255,255,255,0.6)",
     marginTop: 4,
+  },
+  itemBreakdown: {
+    width: "100%",
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.15)",
+    gap: 6,
+  },
+  itemBreakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  itemBreakdownName: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.7)",
+    marginRight: 12,
+  },
+  itemBreakdownPrice: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: "rgba(255,255,255,0.85)",
   },
   section: {
     gap: 12,

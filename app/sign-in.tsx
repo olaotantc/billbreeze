@@ -7,6 +7,8 @@ import {
   StyleSheet,
   Platform,
   Alert,
+  KeyboardAvoidingView,
+  ScrollView,
 } from "react-native";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -44,7 +46,10 @@ export default function SignInScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: topInset }]}>
+    <KeyboardAvoidingView
+      style={[styles.container, { paddingTop: topInset }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <Pressable
         style={styles.closeButton}
         onPress={() => router.back()}
@@ -53,7 +58,12 @@ export default function SignInScreen() {
         <Feather name="x" size={24} color={Colors.text} />
       </Pressable>
 
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentInner}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
+      >
         <View style={styles.header}>
           <Text style={styles.title}>Welcome</Text>
           <Text style={styles.subtitle}>Enter your details to get started</Text>
@@ -70,6 +80,7 @@ export default function SignInScreen() {
               onChangeText={setName}
               autoCapitalize="words"
               autoCorrect={false}
+              returnKeyType="next"
               testID="name-input"
             />
           </View>
@@ -85,6 +96,8 @@ export default function SignInScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={handleSignIn}
               testID="email-input"
             />
           </View>
@@ -109,10 +122,10 @@ export default function SignInScreen() {
             {isSubmitting ? "Signing in..." : "Continue"}
           </Text>
         </Pressable>
-      </View>
 
-      <View style={{ height: bottomInset + 24 }} />
-    </View>
+        <View style={{ height: bottomInset + 24 }} />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -133,6 +146,8 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
+  },
+  contentInner: {
     paddingTop: 24,
     gap: 32,
   },

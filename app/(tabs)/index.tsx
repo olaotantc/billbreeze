@@ -97,7 +97,7 @@ export default function HomeScreen() {
         </View>
       </View>
       <View style={styles.receiptRight}>
-        <Text style={styles.receiptTotal}>{formatCurrency(item.total)}</Text>
+        <Text style={styles.receiptTotal}>{formatCurrency(item.total, item.currency)}</Text>
         <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
       </View>
     </Pressable>

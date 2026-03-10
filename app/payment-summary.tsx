@@ -130,8 +130,8 @@ export default function PaymentSummaryScreen() {
     const amount = breakdown[payerName]?.total || 0;
     const payLinks = buildPaymentLinks(paymentHandles, amount);
     return payLinks
-      ? `Hey ${payerName}! You owe ${formatCurrency(amount)} for ${receipt.merchantName || "our meal"}.${payLinks}`
-      : `Hey ${payerName}! You owe ${formatCurrency(amount)} for ${receipt.merchantName || "our meal"}. Thanks!`;
+      ? `Hey ${payerName}! You owe ${formatCurrency(amount, receipt.currency)} for ${receipt.merchantName || "our meal"}.${payLinks}`
+      : `Hey ${payerName}! You owe ${formatCurrency(amount, receipt.currency)} for ${receipt.merchantName || "our meal"}. Thanks!`;
   };
 
   const handleShare = async (payerName: string) => {
@@ -152,7 +152,7 @@ export default function PaymentSummaryScreen() {
 
   const buildShareAllMessage = () => {
     const lines = receipt.payers
-      .map((p) => `${p}: ${formatCurrency(breakdown[p]?.total || 0)}`)
+      .map((p) => `${p}: ${formatCurrency(breakdown[p]?.total || 0, receipt.currency)}`)
       .join("\n");
 
     let paySection = "";
@@ -173,7 +173,7 @@ export default function PaymentSummaryScreen() {
       paySection = "\n\nPay here:\n" + linkLines.join("\n");
     }
 
-    return `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total)}${paySection}`;
+    return `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total, receipt.currency)}${paySection}`;
   };
 
   const handleShareAll = async () => {
@@ -264,7 +264,7 @@ export default function PaymentSummaryScreen() {
           <Text style={styles.merchantName}>
             {receipt.merchantName || "Bill Split"}
           </Text>
-          <Text style={styles.totalAmount}>{formatCurrency(receipt.total)}</Text>
+          <Text style={styles.totalAmount}>{formatCurrency(receipt.total, receipt.currency)}</Text>
           <Text style={styles.splitInfo}>
             Split {receipt.splitMode === "equal" ? "equally" : "by items"} among{" "}
             {receipt.payers.length} people
@@ -305,7 +305,7 @@ export default function PaymentSummaryScreen() {
                   )}
                 </View>
                 <Text style={styles.payerTotal}>
-                  {formatCurrency(data.total)}
+                  {formatCurrency(data.total, receipt.currency)}
                 </Text>
               </View>
 
@@ -317,7 +317,7 @@ export default function PaymentSummaryScreen() {
                         {item.name}
                       </Text>
                       <Text style={styles.payerItemAmount}>
-                        {formatCurrency(item.amount)}
+                        {formatCurrency(item.amount, receipt.currency)}
                       </Text>
                     </View>
                   ))}
@@ -325,7 +325,7 @@ export default function PaymentSummaryScreen() {
                     <View style={styles.payerItemRow}>
                       <Text style={styles.payerItemName}>Tax & Tip</Text>
                       <Text style={styles.payerItemAmount}>
-                        {formatCurrency(data.taxTip)}
+                        {formatCurrency(data.taxTip, receipt.currency)}
                       </Text>
                     </View>
                   )}
