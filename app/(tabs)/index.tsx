@@ -66,41 +66,52 @@ export default function HomeScreen() {
   };
 
   const renderReceipt = ({ item }: { item: Receipt }) => (
-    <Pressable
-      style={({ pressed }) => [
-        styles.receiptCard,
-        pressed && { opacity: 0.7 },
-      ]}
-      onPress={() =>
-        router.push({
-          pathname: "/receipt-review",
-          params: { receiptId: item.id },
-        })
-      }
-      onLongPress={() => handleDelete(item.id)}
-      testID={`receipt-${item.id}`}
-    >
-      <View style={styles.receiptLeft}>
-        <View style={styles.receiptIcon}>
-          <Ionicons name="receipt-outline" size={20} color={Colors.primary} />
+    <View style={styles.receiptCard}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.receiptContent,
+          pressed && { opacity: 0.7 },
+        ]}
+        onPress={() =>
+          router.push({
+            pathname: "/receipt-review",
+            params: { receiptId: item.id },
+          })
+        }
+        testID={`receipt-${item.id}`}
+      >
+        <View style={styles.receiptLeft}>
+          <View style={styles.receiptIcon}>
+            <Ionicons name="receipt-outline" size={20} color={Colors.primary} />
+          </View>
+          <View style={styles.receiptInfo}>
+            <Text style={styles.receiptMerchant} numberOfLines={1}>
+              {item.merchantName || "Unnamed Receipt"}
+            </Text>
+            <Text style={styles.receiptDate}>
+              {formatDate(item.createdAt)}
+              {item.lineItems.length > 0
+                ? ` \u00B7 ${item.lineItems.length} items`
+                : ""}
+            </Text>
+          </View>
         </View>
-        <View style={styles.receiptInfo}>
-          <Text style={styles.receiptMerchant} numberOfLines={1}>
-            {item.merchantName || "Unnamed Receipt"}
-          </Text>
-          <Text style={styles.receiptDate}>
-            {formatDate(item.createdAt)}
-            {item.lineItems.length > 0
-              ? ` \u00B7 ${item.lineItems.length} items`
-              : ""}
-          </Text>
+        <View style={styles.receiptRight}>
+          <Text style={styles.receiptTotal}>{formatCurrency(item.total, item.currency)}</Text>
+          <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
         </View>
-      </View>
-      <View style={styles.receiptRight}>
-        <Text style={styles.receiptTotal}>{formatCurrency(item.total)}</Text>
-        <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
-      </View>
-    </Pressable>
+      </Pressable>
+      <Pressable
+        style={({ pressed }) => [
+          styles.deleteButton,
+          pressed && { opacity: 0.7 },
+        ]}
+        onPress={() => handleDelete(item.id)}
+        hitSlop={12}
+      >
+        <Feather name="trash-2" size={16} color={Colors.textTertiary} />
+      </Pressable>
+    </View>
   );
 
   return (
@@ -254,13 +265,23 @@ const styles = StyleSheet.create({
   receiptCard: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     backgroundColor: Colors.surface,
     borderRadius: 14,
-    padding: 16,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+  },
+  receiptContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+  },
+  deleteButton: {
+    paddingVertical: 16,
+    paddingRight: 14,
+    paddingLeft: 4,
   },
   receiptLeft: {
     flexDirection: "row",

@@ -9,8 +9,9 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
@@ -23,10 +24,15 @@ import type { LineItem, Receipt } from "@/shared/schema";
 export default function ReceiptReviewScreen() {
   const insets = useSafeAreaInsets();
   const { receipts, addReceipt, updateReceipt, pendingImage, setPendingImage } = useApp();
+  const { receiptId } = useLocalSearchParams<{ receiptId?: string }>();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
+  // Check if we're editing an existing receipt
+  const existingReceipt = receiptId ? receipts.find((r) => r.id === receiptId) : null;
+
   const [merchantName, setMerchantName] = useState("");
+  const [currency, setCurrency] = useState("$");
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [tax, setTax] = useState("0");
   const [tip, setTip] = useState("0");
@@ -36,39 +42,63 @@ export default function ReceiptReviewScreen() {
   const subtotal = lineItems.reduce((sum, item) => sum + item.price, 0);
   const total = subtotal + (parseFloat(tax) || 0) + (parseFloat(tip) || 0);
 
+  const hasInitialized = React.useRef(false);
+  const abortRef = React.useRef<AbortController | null>(null);
+
   useEffect(() => {
+    if (hasInitialized.current) return;
+
+    // Loading an existing receipt
+    if (existingReceipt) {
+      hasInitialized.current = true;
+      setMerchantName(existingReceipt.merchantName || "");
+      setCurrency(existingReceipt.currency || "$");
+      setLineItems(existingReceipt.lineItems || []);
+      setTax((existingReceipt.tax || 0).toString());
+      setTip((existingReceipt.tip || 0).toString());
+      setScanComplete(true);
+      return;
+    }
+    // New scan flow
     if (pendingImage?.base64) {
+      hasInitialized.current = true;
       const b64 = pendingImage.base64;
       console.log("[OCR-DEBUG] pendingImage base64 length:", b64.length);
-      console.log("[OCR-DEBUG] base64 first 80 chars:", b64.substring(0, 80));
-      console.log("[OCR-DEBUG] base64 last 20 chars:", b64.substring(b64.length - 20));
-      setPendingImage(null);
       scanReceipt(b64);
-    } else if (!pendingImage) {
-      console.log("[OCR-DEBUG] No pendingImage available on mount");
+    } else if (!pendingImage && !receiptId) {
+      hasInitialized.current = true;
       setScanComplete(true);
     }
-  }, []);
+  }, [existingReceipt, pendingImage]);
 
   const scanReceipt = async (base64: string) => {
     setIsScanning(true);
     try {
       const baseUrl = getApiUrl();
+      console.log("[OCR-DEBUG] Using API URL:", baseUrl);
       const url = new URL("/api/ocr/parse", baseUrl);
+      console.log("[OCR-DEBUG] Full request URL:", url.toString());
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const timeout = setTimeout(() => controller.abort(), 30000);
       const response = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageBase64: base64 }),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       if (response.ok) {
         const data = await response.json();
         setMerchantName(data.merchantName || "");
+        if (data.currency) setCurrency(data.currency);
         if (data.lineItems && data.lineItems.length > 0) {
           setLineItems(
-            data.lineItems.map((item: { name: string; price: number }) => ({
+            data.lineItems.map((item: { name: string; quantity?: number; price: number }) => ({
               id: generateId(),
               name: item.name,
+              quantity: item.quantity || 1,
               price: item.price,
               assignedTo: [],
             }))
@@ -79,19 +109,23 @@ export default function ReceiptReviewScreen() {
           const diff = data.total - data.subtotal - (data.tax || 0);
           if (diff > 0) setTip(diff.toFixed(2));
         }
+        setPendingImage(null);
         setScanComplete(true);
       } else {
+        setPendingImage(null);
         setScanComplete(true);
         Alert.alert(
           "Scan Issue",
           "Could not read the receipt clearly. You can add items manually."
         );
       }
-    } catch (e) {
+    } catch (e: any) {
+      console.error("[OCR-ERROR] Fetch failed:", e?.message || e);
+      console.error("[OCR-ERROR] URL was:", getApiUrl() + "/api/ocr/parse");
       setScanComplete(true);
       Alert.alert(
         "Scan Issue",
-        "Could not connect to scanning service. You can add items manually."
+        `Could not connect to scanning service (${e?.message || "unknown error"}). You can add items manually.`
       );
     } finally {
       setIsScanning(false);
@@ -104,7 +138,7 @@ export default function ReceiptReviewScreen() {
     }
     setLineItems((prev) => [
       ...prev,
-      { id: generateId(), name: "", price: 0, assignedTo: [] },
+      { id: generateId(), name: "", quantity: 1, price: 0, assignedTo: [] },
     ]);
   };
 
@@ -113,7 +147,7 @@ export default function ReceiptReviewScreen() {
       prev.map((item) => {
         if (item.id !== id) return item;
         if (field === "name") return { ...item, name: value };
-        return { ...item, price: parseFloat(value) || 0 };
+        return { ...item, price: Math.max(0, parseFloat(value) || 0) };
       })
     );
   };
@@ -138,21 +172,28 @@ export default function ReceiptReviewScreen() {
       }
 
       const receipt: Receipt = {
-        id: generateId(),
+        id: existingReceipt?.id || generateId(),
         merchantName: merchantName || "Receipt",
-        date: "",
-        imageUri: undefined,
+        date: existingReceipt?.date || "",
+        imageUri: existingReceipt?.imageUri,
+        currency,
         lineItems,
         subtotal,
         tax: parseFloat(tax) || 0,
         tip: parseFloat(tip) || 0,
+        includeTax: existingReceipt?.includeTax !== false,
+        includeTip: existingReceipt?.includeTip !== false,
         total,
-        splitMode: "equal",
-        payers: [],
-        createdAt: new Date().toISOString(),
+        splitMode: existingReceipt?.splitMode || "equal",
+        payers: existingReceipt?.payers || [],
+        createdAt: existingReceipt?.createdAt || new Date().toISOString(),
       };
 
-      await addReceipt(receipt);
+      if (existingReceipt) {
+        await updateReceipt(receipt);
+      } else {
+        await addReceipt(receipt);
+      }
 
       router.push({
         pathname: "/split-config",
@@ -174,13 +215,30 @@ export default function ReceiptReviewScreen() {
           <Text style={styles.scanningText}>
             Extracting items and prices...
           </Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.cancelButton,
+              pressed && { opacity: 0.7 },
+            ]}
+            onPress={() => {
+              abortRef.current?.abort();
+              setPendingImage(null);
+              setIsScanning(false);
+              setScanComplete(true);
+            }}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </Pressable>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: topInset }]}>
+    <KeyboardAvoidingView
+      style={[styles.container, { paddingTop: topInset }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <View style={styles.header}>
         <Pressable style={styles.navButton} onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={Colors.text} />
@@ -228,6 +286,9 @@ export default function ReceiptReviewScreen() {
           {lineItems.map((item, index) => (
             <View key={item.id} style={styles.itemRow}>
               <View style={styles.itemInputs}>
+                <View style={styles.qtyBadge}>
+                  <Text style={styles.qtyText}>{item.quantity || 1}x</Text>
+                </View>
                 <TextInput
                   style={styles.itemNameInput}
                   placeholder="Item name"
@@ -239,7 +300,7 @@ export default function ReceiptReviewScreen() {
                   style={styles.itemPriceInput}
                   placeholder="0.00"
                   placeholderTextColor={Colors.textTertiary}
-                  value={item.price > 0 ? item.price.toString() : ""}
+                  value={item.price > 0 ? item.price.toFixed(2) : ""}
                   onChangeText={(v) => updateItem(item.id, "price", v)}
                   keyboardType="decimal-pad"
                 />
@@ -265,13 +326,13 @@ export default function ReceiptReviewScreen() {
         <View style={styles.totalsSection}>
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Subtotal</Text>
-            <Text style={styles.totalValue}>{formatCurrency(subtotal)}</Text>
+            <Text style={styles.totalValue}>{formatCurrency(subtotal, currency)}</Text>
           </View>
 
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Tax</Text>
             <View style={styles.totalInputWrapper}>
-              <Text style={styles.dollarSign}>$</Text>
+              <Text style={styles.dollarSign}>{currency}</Text>
               <TextInput
                 style={styles.totalInput}
                 value={tax}
@@ -285,7 +346,7 @@ export default function ReceiptReviewScreen() {
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Tip</Text>
             <View style={styles.totalInputWrapper}>
-              <Text style={styles.dollarSign}>$</Text>
+              <Text style={styles.dollarSign}>{currency}</Text>
               <TextInput
                 style={styles.totalInput}
                 value={tip}
@@ -299,7 +360,7 @@ export default function ReceiptReviewScreen() {
           <View style={[styles.totalRow, styles.grandTotalRow]}>
             <Text style={styles.grandTotalLabel}>Total</Text>
             <Text style={styles.grandTotalValue}>
-              {formatCurrency(total)}
+              {formatCurrency(total, currency)}
             </Text>
           </View>
         </View>
@@ -315,11 +376,11 @@ export default function ReceiptReviewScreen() {
           disabled={isSaving}
           testID="continue-btn"
         >
-          <Text style={styles.continueText}>Continue to Split</Text>
-          <Feather name="arrow-right" size={20} color={Colors.white} />
+          <Text style={styles.continueText}>{isSaving ? "Saving..." : "Continue to Split"}</Text>
+          {!isSaving && <Feather name="arrow-right" size={20} color={Colors.white} />}
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -347,6 +408,19 @@ const styles = StyleSheet.create({
   scanningText: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+  },
+  cancelButton: {
+    marginTop: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
     color: Colors.textSecondary,
   },
   header: {
@@ -428,7 +502,21 @@ const styles = StyleSheet.create({
   itemInputs: {
     flex: 1,
     flexDirection: "row",
-    gap: 8,
+    alignItems: "center",
+    gap: 6,
+  },
+  qtyBadge: {
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    minWidth: 30,
+    alignItems: "center",
+  },
+  qtyText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.primary,
   },
   itemNameInput: {
     flex: 1,
@@ -456,8 +544,8 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   removeButton: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
   },

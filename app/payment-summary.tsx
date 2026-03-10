@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -51,6 +51,9 @@ export default function PaymentSummaryScreen() {
   if (!receipt) {
     return (
       <View style={[styles.container, { paddingTop: topInset }]}>
+        <Pressable style={styles.navButton} onPress={() => router.back()}>
+          <Feather name="arrow-left" size={22} color={Colors.text} />
+        </Pressable>
         <Text style={styles.errorText}>Receipt not found</Text>
       </View>
     );
@@ -74,9 +77,11 @@ export default function PaymentSummaryScreen() {
     } else if (receipt.splitMode === "itemized") {
       receipt.lineItems.forEach((item) => {
         if (item.assignedTo.length > 0) {
-          const share = roundCents(item.price / item.assignedTo.length);
-          item.assignedTo.forEach((p) => {
+          const baseShare = roundCents(item.price / item.assignedTo.length);
+          const remainder = roundCents(item.price - baseShare * item.assignedTo.length);
+          item.assignedTo.forEach((p, i) => {
             if (breakdown[p]) {
+              const share = i === 0 ? baseShare + remainder : baseShare;
               breakdown[p].items.push({ name: item.name, amount: share });
               breakdown[p].subtotal += share;
             }
@@ -85,14 +90,29 @@ export default function PaymentSummaryScreen() {
       });
 
       const subtotal = receipt.subtotal ?? receipt.lineItems.reduce((s, i) => s + i.price, 0);
-      const taxTipTotal = receipt.tax + receipt.tip;
+      const effectiveTax = receipt.includeTax !== false ? receipt.tax : 0;
+      const effectiveTip = receipt.includeTip !== false ? receipt.tip : 0;
+      const taxTipTotal = effectiveTax + effectiveTip;
 
       receipt.payers.forEach((p) => {
         breakdown[p].subtotal = roundCents(breakdown[p].subtotal);
-        if (subtotal > 0 && taxTipTotal > 0) {
-          const proportion = breakdown[p].subtotal / subtotal;
-          breakdown[p].taxTip = roundCents(proportion * taxTipTotal);
-        }
+      });
+
+      if (subtotal > 0 && taxTipTotal > 0) {
+        let taxTipDistributed = 0;
+        receipt.payers.forEach((p, i) => {
+          if (i < receipt.payers.length - 1) {
+            const proportion = breakdown[p].subtotal / subtotal;
+            breakdown[p].taxTip = roundCents(proportion * taxTipTotal);
+            taxTipDistributed += breakdown[p].taxTip;
+          } else {
+            // Last payer gets the remainder to ensure exact sum
+            breakdown[p].taxTip = roundCents(taxTipTotal - taxTipDistributed);
+          }
+        });
+      }
+
+      receipt.payers.forEach((p) => {
         breakdown[p].total = roundCents(breakdown[p].subtotal + breakdown[p].taxTip);
       });
     }
@@ -100,7 +120,7 @@ export default function PaymentSummaryScreen() {
     return breakdown;
   };
 
-  const breakdown = getPayerBreakdown();
+  const breakdown = useMemo(() => getPayerBreakdown(), [receipt]);
 
   const hasPaymentHandles = !!(paymentHandles.venmo || paymentHandles.paypal || paymentHandles.cashapp);
 
@@ -130,8 +150,8 @@ export default function PaymentSummaryScreen() {
     const amount = breakdown[payerName]?.total || 0;
     const payLinks = buildPaymentLinks(paymentHandles, amount);
     return payLinks
-      ? `Hey ${payerName}! You owe ${formatCurrency(amount)} for ${receipt.merchantName || "our meal"}.${payLinks}`
-      : `Hey ${payerName}! You owe ${formatCurrency(amount)} for ${receipt.merchantName || "our meal"}. Thanks!`;
+      ? `Hey ${payerName}! You owe ${formatCurrency(amount, receipt.currency)} for ${receipt.merchantName || "our meal"}.${payLinks}`
+      : `Hey ${payerName}! You owe ${formatCurrency(amount, receipt.currency)} for ${receipt.merchantName || "our meal"}. Thanks!`;
   };
 
   const handleShare = async (payerName: string) => {
@@ -152,7 +172,7 @@ export default function PaymentSummaryScreen() {
 
   const buildShareAllMessage = () => {
     const lines = receipt.payers
-      .map((p) => `${p}: ${formatCurrency(breakdown[p]?.total || 0)}`)
+      .map((p) => `${p}: ${formatCurrency(breakdown[p]?.total || 0, receipt.currency)}`)
       .join("\n");
 
     let paySection = "";
@@ -173,7 +193,7 @@ export default function PaymentSummaryScreen() {
       paySection = "\n\nPay here:\n" + linkLines.join("\n");
     }
 
-    return `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total)}${paySection}`;
+    return `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total, receipt.currency)}${paySection}`;
   };
 
   const handleShareAll = async () => {
@@ -211,36 +231,40 @@ export default function PaymentSummaryScreen() {
     }
 
     setIsSaving(true);
+    try {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
 
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const requests: PaymentRequest[] = receipt.payers.map((payer) => ({
+        id: generateId(),
+        receiptId: receipt.id,
+        payerName: payer,
+        amount: Math.round((breakdown[payer]?.total || 0) * 100) / 100,
+        status: "pending" as const,
+        createdAt: new Date().toISOString(),
+      }));
+
+      await addPaymentRequests(requests);
+      Alert.alert(
+        "Requests Saved",
+        `${requests.length} payment requests have been saved to your inbox.`,
+        [
+          {
+            text: "View Inbox",
+            onPress: () => router.replace("/(tabs)/inbox"),
+          },
+          {
+            text: "Done",
+            onPress: () => router.replace("/(tabs)"),
+          },
+        ]
+      );
+    } catch (e) {
+      Alert.alert("Error", "Failed to save payment requests. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
-
-    const requests: PaymentRequest[] = receipt.payers.map((payer) => ({
-      id: generateId(),
-      receiptId: receipt.id,
-      payerName: payer,
-      amount: Math.round((breakdown[payer]?.total || 0) * 100) / 100,
-      status: "pending" as const,
-      createdAt: new Date().toISOString(),
-    }));
-
-    await addPaymentRequests(requests);
-    setIsSaving(false);
-    Alert.alert(
-      "Requests Saved",
-      `${requests.length} payment requests have been saved to your inbox.`,
-      [
-        {
-          text: "View Inbox",
-          onPress: () => router.replace("/(tabs)/inbox"),
-        },
-        {
-          text: "Done",
-          onPress: () => router.replace("/(tabs)"),
-        },
-      ]
-    );
   };
 
   return (
@@ -264,7 +288,7 @@ export default function PaymentSummaryScreen() {
           <Text style={styles.merchantName}>
             {receipt.merchantName || "Bill Split"}
           </Text>
-          <Text style={styles.totalAmount}>{formatCurrency(receipt.total)}</Text>
+          <Text style={styles.totalAmount}>{formatCurrency(receipt.total, receipt.currency)}</Text>
           <Text style={styles.splitInfo}>
             Split {receipt.splitMode === "equal" ? "equally" : "by items"} among{" "}
             {receipt.payers.length} people
@@ -305,7 +329,7 @@ export default function PaymentSummaryScreen() {
                   )}
                 </View>
                 <Text style={styles.payerTotal}>
-                  {formatCurrency(data.total)}
+                  {formatCurrency(data.total, receipt.currency)}
                 </Text>
               </View>
 
@@ -317,7 +341,7 @@ export default function PaymentSummaryScreen() {
                         {item.name}
                       </Text>
                       <Text style={styles.payerItemAmount}>
-                        {formatCurrency(item.amount)}
+                        {formatCurrency(item.amount, receipt.currency)}
                       </Text>
                     </View>
                   ))}
@@ -325,7 +349,7 @@ export default function PaymentSummaryScreen() {
                     <View style={styles.payerItemRow}>
                       <Text style={styles.payerItemName}>Tax & Tip</Text>
                       <Text style={styles.payerItemAmount}>
-                        {formatCurrency(data.taxTip)}
+                        {formatCurrency(data.taxTip, receipt.currency)}
                       </Text>
                     </View>
                   )}
@@ -358,7 +382,7 @@ export default function PaymentSummaryScreen() {
           testID="save-requests-btn"
         >
           <Ionicons name={hasSavedRequests ? "checkmark-circle" : "checkmark-circle-outline"} size={22} color={Colors.white} />
-          <Text style={styles.saveButtonText}>{hasSavedRequests ? "Requests Saved" : "Save Payment Requests"}</Text>
+          <Text style={styles.saveButtonText}>{isSaving ? "Saving..." : hasSavedRequests ? "Requests Saved" : "Save Payment Requests"}</Text>
         </Pressable>
       </View>
     </View>

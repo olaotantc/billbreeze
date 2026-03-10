@@ -1,20 +1,39 @@
 import { fetch } from "expo/fetch";
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import Constants from "expo-constants";
+
+const API_PORT = 8080;
 
 /**
- * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
- * @returns {string} The API base URL
+ * Gets the base URL for the Express API server.
+ * Auto-detects the dev machine's IP from Expo's runtime context,
+ * so it works even when the IP changes between sessions.
  */
 export function getApiUrl(): string {
-  const host = process.env.EXPO_PUBLIC_DOMAIN;
-
-  if (host) {
-    return new URL(`https://${host}`).href;
+  // 1. Explicit override (production or custom setups)
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // Local development fallback
-  const port = process.env.EXPO_PUBLIC_API_PORT || "8080";
-  return `http://localhost:${port}`;
+  // 2. Replit domain
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  if (domain) {
+    return new URL(`https://${domain}`).href;
+  }
+
+  // 3. Auto-detect from Expo dev server (works on physical devices + simulators)
+  const debuggerHost =
+    Constants.expoConfig?.hostUri ??
+    (Constants as any).manifest?.debuggerHost;
+  if (debuggerHost) {
+    const ip = debuggerHost.split(":")[0];
+    if (ip) {
+      return `http://${ip}:${API_PORT}`;
+    }
+  }
+
+  // 4. Fallback for simulator
+  return `http://localhost:${API_PORT}`;
 }
 
 async function throwIfResNotOk(res: Response) {

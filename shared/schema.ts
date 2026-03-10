@@ -3,6 +3,7 @@ import { z } from "zod";
 export const lineItemSchema = z.object({
   id: z.string(),
   name: z.string(),
+  quantity: z.number().default(1),
   price: z.number(),
   assignedTo: z.array(z.string()).default([]),
 });
@@ -12,10 +13,13 @@ export const receiptSchema = z.object({
   merchantName: z.string().default(""),
   date: z.string().default(""),
   imageUri: z.string().optional(),
+  currency: z.string().default("$"),
   lineItems: z.array(lineItemSchema).default([]),
   subtotal: z.number().default(0),
   tax: z.number().default(0),
   tip: z.number().default(0),
+  includeTax: z.boolean().default(true),
+  includeTip: z.boolean().default(true),
   total: z.number().default(0),
   splitMode: z.enum(["equal", "itemized", "fixed"]).default("equal"),
   payers: z.array(z.string()).default([]),
@@ -33,8 +37,10 @@ export const paymentRequestSchema = z.object({
 
 export const ocrResponseSchema = z.object({
   merchantName: z.string(),
+  currency: z.string().default("$"),
   lineItems: z.array(z.object({
     name: z.string(),
+    quantity: z.number().default(1),
     price: z.number(),
   })),
   subtotal: z.number().optional(),

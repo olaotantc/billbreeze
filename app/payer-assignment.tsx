@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -39,6 +39,9 @@ export default function PayerAssignmentScreen() {
   if (!receipt) {
     return (
       <View style={[styles.container, { paddingTop: topInset }]}>
+        <Pressable style={styles.navButton} onPress={() => router.back()}>
+          <Feather name="arrow-left" size={22} color={Colors.text} />
+        </Pressable>
         <Text style={styles.errorText}>Receipt not found</Text>
       </View>
     );
@@ -109,27 +112,38 @@ export default function PayerAssignmentScreen() {
     receipt.lineItems.forEach((item) => {
       const assignedPayers = assignments[item.id] || [];
       if (assignedPayers.length > 0) {
-        const share = roundCents(item.price / assignedPayers.length);
-        assignedPayers.forEach((p) => {
-          totals[p] = (totals[p] || 0) + share;
+        const baseShare = roundCents(item.price / assignedPayers.length);
+        const remainder = roundCents(item.price - baseShare * assignedPayers.length);
+        assignedPayers.forEach((p, i) => {
+          totals[p] = (totals[p] || 0) + (i === 0 ? baseShare + remainder : baseShare);
         });
       }
     });
 
-    const taxTipTotal = receipt.tax + receipt.tip;
+    const effectiveTax = receipt.includeTax !== false ? receipt.tax : 0;
+    const effectiveTip = receipt.includeTip !== false ? receipt.tip : 0;
+    const taxTipTotal = effectiveTax + effectiveTip;
     const subtotal = receipt.subtotal ?? receipt.lineItems.reduce((s, i) => s + i.price, 0);
 
     if (subtotal > 0 && taxTipTotal > 0) {
-      Object.keys(totals).forEach((p) => {
+      const payers = Object.keys(totals);
+      let taxTipDistributed = 0;
+      payers.forEach((p, i) => {
         const proportion = totals[p] / subtotal;
-        totals[p] = roundCents(totals[p] + proportion * taxTipTotal);
+        if (i < payers.length - 1) {
+          const share = roundCents(proportion * taxTipTotal);
+          totals[p] = roundCents(totals[p] + share);
+          taxTipDistributed += share;
+        } else {
+          totals[p] = roundCents(totals[p] + (taxTipTotal - taxTipDistributed));
+        }
       });
     }
 
     return totals;
   };
 
-  const payerTotals = getPayerTotals();
+  const payerTotals = useMemo(() => getPayerTotals(), [assignments, receipt]);
 
   return (
     <View style={[styles.container, { paddingTop: topInset }]}>
@@ -148,7 +162,7 @@ export default function PayerAssignmentScreen() {
               {payer}
             </Text>
             <Text style={styles.payerSummaryAmount}>
-              {formatCurrency(payerTotals[payer] || 0)}
+              {formatCurrency(payerTotals[payer] || 0, receipt.currency)}
             </Text>
           </View>
         ))}
@@ -165,7 +179,7 @@ export default function PayerAssignmentScreen() {
               <Text style={styles.itemName} numberOfLines={1}>
                 {item.name || "Unnamed Item"}
               </Text>
-              <Text style={styles.itemPrice}>{formatCurrency(item.price)}</Text>
+              <Text style={styles.itemPrice}>{formatCurrency(item.price, receipt.currency)}</Text>
             </View>
             <View style={styles.payerButtons}>
               {receipt.payers.map((payer) => {
@@ -209,8 +223,8 @@ export default function PayerAssignmentScreen() {
           disabled={isSaving}
           testID="assignment-continue-btn"
         >
-          <Text style={styles.continueText}>View Summary</Text>
-          <Feather name="arrow-right" size={20} color={Colors.white} />
+          <Text style={styles.continueText}>{isSaving ? "Saving..." : "View Summary"}</Text>
+          {!isSaving && <Feather name="arrow-right" size={20} color={Colors.white} />}
         </Pressable>
       </View>
     </View>
