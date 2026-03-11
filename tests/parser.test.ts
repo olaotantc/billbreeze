@@ -1,4 +1,4 @@
-import { parseReceiptText } from "../server/routes";
+import { parseReceiptText } from "../lib/ocr-parser";
 
 // ── Simple test runner ──────────────────────────────────────────────────────
 let passed = 0;

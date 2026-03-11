@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useApp } from "@/lib/app-context";
 import { generateId, formatCurrency } from "@/lib/utils";
-import { getApiUrl } from "@/lib/query-client";
+import { parseReceiptText } from "@/lib/ocr-parser";
 import Colors from "@/constants/colors";
 import type { LineItem, Receipt } from "@/shared/schema";
 
@@ -43,7 +43,6 @@ export default function ReceiptReviewScreen() {
   const total = subtotal + (parseFloat(tax) || 0) + (parseFloat(tip) || 0);
 
   const hasInitialized = React.useRef(false);
-  const abortRef = React.useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (hasInitialized.current) return;
@@ -59,73 +58,65 @@ export default function ReceiptReviewScreen() {
       setScanComplete(true);
       return;
     }
-    // New scan flow
-    if (pendingImage?.base64) {
+    // New scan flow — use on-device OCR
+    if (pendingImage?.uri) {
       hasInitialized.current = true;
-      const b64 = pendingImage.base64;
-      console.log("[OCR-DEBUG] pendingImage base64 length:", b64.length);
-      scanReceipt(b64);
+      scanReceiptOnDevice(pendingImage.uri);
     } else if (!pendingImage && !receiptId) {
       hasInitialized.current = true;
       setScanComplete(true);
     }
   }, [existingReceipt, pendingImage]);
 
-  const scanReceipt = async (base64: string) => {
+  const scanReceiptOnDevice = async (imageUri: string) => {
     setIsScanning(true);
     try {
-      const baseUrl = getApiUrl();
-      console.log("[OCR-DEBUG] Using API URL:", baseUrl);
-      const url = new URL("/api/ocr/parse", baseUrl);
-      console.log("[OCR-DEBUG] Full request URL:", url.toString());
-      const controller = new AbortController();
-      abortRef.current = controller;
-      const timeout = setTimeout(() => controller.abort(), 30000);
-      const response = await fetch(url.toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: base64 }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
+      // Dynamic import to avoid bundling issues on web
+      const MlkitOcr = require("react-native-mlkit-ocr").default;
+      const ocrResult = await MlkitOcr.detectFromUri(imageUri);
 
-      if (response.ok) {
-        const data = await response.json();
-        setMerchantName(data.merchantName || "");
-        if (data.currency) setCurrency(data.currency);
-        if (data.lineItems && data.lineItems.length > 0) {
-          setLineItems(
-            data.lineItems.map((item: { name: string; quantity?: number; price: number }) => ({
-              id: generateId(),
-              name: item.name,
-              quantity: item.quantity || 1,
-              price: item.price,
-              assignedTo: [],
-            }))
-          );
-        }
-        if (data.tax) setTax(data.tax.toString());
-        if (data.total && data.subtotal) {
-          const diff = data.total - data.subtotal - (data.tax || 0);
-          if (diff > 0) setTip(diff.toFixed(2));
-        }
-        setPendingImage(null);
-        setScanComplete(true);
-      } else {
+      // Combine all recognized text blocks into a single string
+      const fullText = ocrResult.map((block: { text: string }) => block.text).join("\n");
+
+      if (fullText.length === 0) {
         setPendingImage(null);
         setScanComplete(true);
         Alert.alert(
           "Scan Issue",
           "Could not read the receipt clearly. You can add items manually."
         );
+        return;
       }
+
+      const data = parseReceiptText(fullText);
+
+      setMerchantName(data.merchantName || "");
+      if (data.currency) setCurrency(data.currency);
+      if (data.lineItems && data.lineItems.length > 0) {
+        setLineItems(
+          data.lineItems.map((item: { name: string; quantity?: number; price: number }) => ({
+            id: generateId(),
+            name: item.name,
+            quantity: item.quantity || 1,
+            price: item.price,
+            assignedTo: [],
+          }))
+        );
+      }
+      if (data.tax) setTax(data.tax.toString());
+      if (data.total && data.subtotal) {
+        const diff = data.total - data.subtotal - (data.tax || 0);
+        if (diff > 0) setTip(diff.toFixed(2));
+      }
+      setPendingImage(null);
+      setScanComplete(true);
     } catch (e: any) {
-      console.error("[OCR-ERROR] Fetch failed:", e?.message || e);
-      console.error("[OCR-ERROR] URL was:", getApiUrl() + "/api/ocr/parse");
+      console.error("[OCR-ERROR] On-device OCR failed:", e?.message || e);
+      setPendingImage(null);
       setScanComplete(true);
       Alert.alert(
         "Scan Issue",
-        `Could not connect to scanning service (${e?.message || "unknown error"}). You can add items manually.`
+        "Could not read the receipt. You can add items manually."
       );
     } finally {
       setIsScanning(false);
@@ -221,7 +212,6 @@ export default function ReceiptReviewScreen() {
               pressed && { opacity: 0.7 },
             ]}
             onPress={() => {
-              abortRef.current?.abort();
               setPendingImage(null);
               setIsScanning(false);
               setScanComplete(true);

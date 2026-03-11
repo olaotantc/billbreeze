@@ -1,0 +1,10 @@
+server/
+landing/
+tests/
+scripts/
+migrations/
+attached_assets/
+patches/
+docs/
+.claude/
+*.md

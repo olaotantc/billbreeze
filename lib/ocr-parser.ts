@@ -1,98 +1,8 @@
-import type { Express, Request, Response } from "express";
-import { createServer, type Server } from "node:http";
-
-export async function registerRoutes(app: Express): Promise<Server> {
-  app.post("/api/ocr/parse", async (req: Request, res: Response) => {
-    try {
-      if (!req.body || typeof req.body !== "object") {
-        return res.status(400).json({ error: "Request body is required with Content-Type: application/json" });
-      }
-
-      let { imageBase64 } = req.body;
-
-      if (!imageBase64 || typeof imageBase64 !== "string") {
-        return res.status(400).json({ error: "imageBase64 is required and must be a string" });
-      }
-
-      console.log("[OCR-DEBUG] Raw base64 length:", imageBase64.length);
-      console.log("[OCR-DEBUG] Raw base64 first 80:", imageBase64.substring(0, 80));
-
-      // Strip data URI prefix if present
-      if (imageBase64.includes(",")) {
-        imageBase64 = imageBase64.split(",")[1];
-        console.log("[OCR-DEBUG] Stripped data URI prefix, new length:", imageBase64.length);
-      }
-
-      const base64Pattern = /^[A-Za-z0-9+/=\s]+$/;
-      if (!base64Pattern.test(imageBase64)) {
-        return res.status(400).json({ error: "imageBase64 contains invalid characters" });
-      }
-
-      imageBase64 = imageBase64.replace(/\s/g, "");
-      console.log("[OCR-DEBUG] After whitespace cleanup, length:", imageBase64.length);
-
-      const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ error: "Google Cloud Vision API key not configured" });
-      }
-
-      const visionResponse = await fetch(
-        `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            requests: [
-              {
-                image: { content: imageBase64 },
-                features: [
-                  { type: "DOCUMENT_TEXT_DETECTION", maxResults: 1 },
-                  { type: "TEXT_DETECTION", maxResults: 1 },
-                ],
-              },
-            ],
-          }),
-        }
-      );
-
-      if (!visionResponse.ok) {
-        const errorText = await visionResponse.text();
-        console.error("Vision API error (status " + visionResponse.status + "):", errorText);
-        return res.status(500).json({ error: "OCR service error" });
-      }
-
-      const visionData = await visionResponse.json() as {
-        responses?: Array<{
-          textAnnotations?: Array<{ description?: string }>;
-          fullTextAnnotation?: { text?: string };
-          error?: { message?: string };
-        }>;
-      };
-
-      const annotation = visionData.responses?.[0];
-      if (annotation?.error) {
-        console.error("Vision annotation error:", annotation.error.message);
-        return res.status(500).json({ error: "OCR processing failed" });
-      }
-
-      const fullText = annotation?.fullTextAnnotation?.text || annotation?.textAnnotations?.[0]?.description || "";
-      console.log("OCR raw text length:", fullText.length, "chars");
-      if (fullText.length > 0) {
-        console.log("OCR first 200 chars:", fullText.substring(0, 200));
-      }
-      const parsed = parseReceiptText(fullText);
-      console.log("Parsed result:", JSON.stringify({ merchantName: parsed.merchantName, items: parsed.lineItems.length, subtotal: parsed.subtotal, tax: parsed.tax, total: parsed.total }));
-
-      return res.json(parsed);
-    } catch (error) {
-      console.error("OCR parse error:", error);
-      return res.status(500).json({ error: "Failed to parse receipt" });
-    }
-  });
-
-  const httpServer = createServer(app);
-  return httpServer;
-}
+/**
+ * Receipt text parser — extracted from server/routes.ts for on-device use.
+ * Pure function: takes raw OCR text, returns structured receipt data.
+ * Tested by tests/parser.test.ts (52 cases).
+ */
 
 export function parseReceiptText(text: string): {
   merchantName: string;
@@ -399,11 +309,6 @@ export function parseReceiptText(text: string): {
         }
       }
     }
-  }
-
-  console.log("[PARSER] Result:", JSON.stringify({ merchantName, currency, items: lineItems.length, subtotal, tax, total }));
-  if (lineItems.length > 0) {
-    console.log("[PARSER] Items:", JSON.stringify(lineItems));
   }
 
   return { merchantName, currency, lineItems, subtotal, tax, total };
