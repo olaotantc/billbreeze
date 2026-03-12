@@ -68,7 +68,7 @@ export default function PaymentSummaryScreen() {
     });
 
     if (receipt.splitMode === "equal") {
-      const baseAmount = roundCents(receipt.total / receipt.payers.length);
+      const baseAmount = Math.floor((receipt.total / receipt.payers.length) * 100) / 100;
       const remainder = roundCents(receipt.total - baseAmount * receipt.payers.length);
       receipt.payers.forEach((p, i) => {
         const amount = i === 0 ? baseAmount + remainder : baseAmount;
@@ -78,7 +78,7 @@ export default function PaymentSummaryScreen() {
     } else if (receipt.splitMode === "itemized") {
       receipt.lineItems.forEach((item) => {
         if (item.assignedTo.length > 0) {
-          const baseShare = roundCents(item.price / item.assignedTo.length);
+          const baseShare = Math.floor((item.price / item.assignedTo.length) * 100) / 100;
           const remainder = roundCents(item.price - baseShare * item.assignedTo.length);
           item.assignedTo.forEach((p, i) => {
             if (breakdown[p]) {

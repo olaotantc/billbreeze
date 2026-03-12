@@ -112,7 +112,7 @@ export default function PayerAssignmentScreen() {
     receipt.lineItems.forEach((item) => {
       const assignedPayers = assignments[item.id] || [];
       if (assignedPayers.length > 0) {
-        const baseShare = roundCents(item.price / assignedPayers.length);
+        const baseShare = Math.floor((item.price / assignedPayers.length) * 100) / 100;
         const remainder = roundCents(item.price - baseShare * assignedPayers.length);
         assignedPayers.forEach((p, i) => {
           totals[p] = (totals[p] || 0) + (i === 0 ? baseShare + remainder : baseShare);
