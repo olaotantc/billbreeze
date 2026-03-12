@@ -241,6 +241,7 @@ export default function PaymentSummaryScreen() {
         receiptId: receipt.id,
         payerName: payer,
         amount: Math.round((breakdown[payer]?.total || 0) * 100) / 100,
+        currency: receipt.currency || "$",
         status: "pending" as const,
         createdAt: new Date().toISOString(),
       }));

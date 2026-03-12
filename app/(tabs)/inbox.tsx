@@ -64,7 +64,7 @@ export default function InboxScreen() {
             item.status === "paid" && styles.paidAmount,
           ]}
         >
-          {formatCurrency(item.amount)}
+          {formatCurrency(item.amount, item.currency)}
         </Text>
         <View
           style={[
