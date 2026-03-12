@@ -125,6 +125,11 @@ export default function PayerAssignmentScreen() {
     const taxTipTotal = effectiveTax + effectiveTip;
     const subtotal = receipt.subtotal ?? receipt.lineItems.reduce((s, i) => s + i.price, 0);
 
+    // Round subtotals before computing tax/tip proportions
+    Object.keys(totals).forEach((p) => {
+      totals[p] = roundCents(totals[p]);
+    });
+
     if (subtotal > 0 && taxTipTotal > 0) {
       const payers = Object.keys(totals);
       let taxTipDistributed = 0;
