@@ -79,6 +79,14 @@ tests/
 - Error boundaries at app root; use `Alert.alert()` for user-facing errors
 - OCR parser has a 53-case test suite; other areas lack tests, so be cautious with refactors
 
+## Cowork Coordination
+This project uses a shared workflow between Claude Code (CLI) and Claude Cowork (web).
+- **`handoff.md`** — Activity log. Read before starting work, append after completing work.
+- **`cowork/COWORK.md`** — Cowork's instructions and role boundaries.
+- **`cowork/deliverables/`** — Cowork's output (copy, specs, asset plans). Pick up files here to implement.
+- **`project_status.md`** — Source of truth for feature/issue status. Both agents update this.
+- After completing any task, log it in `handoff.md` with a dated entry.
+
 ## Known Limitations
 - All data is local-only (AsyncStorage) - lost on uninstall
 - No real authentication system (local email/name only)

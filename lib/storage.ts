@@ -79,7 +79,11 @@ export async function deleteReceipt(id: string): Promise<void> {
 
 export async function getPaymentRequests(): Promise<PaymentRequest[]> {
   const data = await AsyncStorage.getItem(REQUESTS_KEY);
-  return safeParse(data, []);
+  const requests = safeParse<PaymentRequest[]>(data, []);
+  return requests.map((r) => ({
+    ...r,
+    currency: r.currency || "$",
+  }));
 }
 
 export async function savePaymentRequest(request: PaymentRequest): Promise<void> {
