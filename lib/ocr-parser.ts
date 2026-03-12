@@ -82,8 +82,8 @@ export function parseReceiptText(text: string): {
   // Quantity line: "2 x 380.00" or "3 @ 12.50"
   const qtyPricePattern = /^(\d+)\s*[xX@]\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+\.\d{1,2}|\d+)$/;
   const subtotalPattern = /sub\s*-?\s*total/i;
-  const taxPattern = /\btax(?:es)?\b|\bhst\b|\bgst\b|\bpst\b|\bvat\b|\bctl\b/i;
-  const totalPattern = /\btotal\b|\bamount\s*due\b|\bbalance\s*due\b/i;
+  const taxPattern = /\btax(?:es)?\b|\bhst\b|\bgst\b|\bpst\b|\bvat\b|\bctl\b|\bconsumption\s*tax\b/i;
+  const totalPattern = /\btotal\b|\bamount\s*due\b|\bbalance\s*due\b|\bbill\s*amount\b/i;
   const tipPattern = /\btip\b|\bgratuity\b/i;
 
   const parsePrice = (s: string): number => {
@@ -114,6 +114,10 @@ export function parseReceiptText(text: string): {
       // "Test Receipt", "OCR App", etc.
       /\btest\s+receipt\b/i,
       /\bdining\s+with\b/i,
+      // City/location + postal code: "Lagos 100281", "Abuja 900001"
+      /^[A-Z][a-zA-Z\s]+\d{5,6}\s*$/,
+      // Standalone city names (common on Nigerian/international receipts)
+      /^(Lagos|Abuja|Ikeja|Lekki|Victoria\s*Island|Ikoyi|Port\s*Harcourt|Ibadan|Kano|Accra|Nairobi|Dar\s*es\s*Salaam)\s*$/i,
     ];
     return noisePatterns.some((p) => p.test(line));
   };
@@ -309,6 +313,74 @@ export function parseReceiptText(text: string): {
         }
       }
     }
+  }
+
+  // ── Post-processing sanity checks ─────────────────────────────────────────
+
+  // 1. Remove items whose name matches a known summary/total pattern
+  //    (catches cases where regex didn't match inline, e.g. split across OCR blocks)
+  for (let i = lineItems.length - 1; i >= 0; i--) {
+    const n = lineItems[i].name;
+    if (totalPattern.test(n) || /\bbill\b/i.test(n)) {
+      if (!total) total = lineItems[i].price;
+      lineItems.splice(i, 1);
+    } else if (subtotalPattern.test(n)) {
+      if (!subtotal) subtotal = lineItems[i].price;
+      lineItems.splice(i, 1);
+    } else if (taxPattern.test(n) && !tipPattern.test(n)) {
+      if (!tax) tax = lineItems[i].price;
+      lineItems.splice(i, 1);
+    } else if (tipPattern.test(n)) {
+      lineItems.splice(i, 1);
+    }
+  }
+
+  // 2. If we have a total, remove items whose price >= total AND the item sum
+  //    (these are almost certainly misclassified summary lines, not real items)
+  if (total && total > 0 && lineItems.length > 1) {
+    const itemSum = lineItems.reduce((s, item) => s + item.price, 0);
+    for (let i = lineItems.length - 1; i >= 0; i--) {
+      if (lineItems[i].price >= total && lineItems[i].price >= itemSum * 0.5) {
+        lineItems.splice(i, 1);
+      }
+    }
+  }
+
+  // 3. Filter items that look like addresses/locations: single word with no price context
+  //    that have a suspiciously round postal-code-like price (5-6 digit integer)
+  for (let i = lineItems.length - 1; i >= 0; i--) {
+    const item = lineItems[i];
+    const priceStr = item.price.toString();
+    const isSingleWord = item.name.trim().split(/\s+/).length === 1;
+    const isPostalCodePrice = /^\d{5,6}$/.test(priceStr) && item.price % 1 === 0;
+    if (isSingleWord && isPostalCodePrice) {
+      lineItems.splice(i, 1);
+    }
+  }
+
+  // 4. Deduplicate: if two items have the same name and one is qty 1 at the unit price
+  //    while another has qty > 1 at qty * unitPrice, keep only the qty > 1 entry
+  for (let i = lineItems.length - 1; i >= 0; i--) {
+    for (let j = 0; j < i; j++) {
+      if (lineItems[i].name === lineItems[j].name) {
+        const a = lineItems[j];
+        const b = lineItems[i];
+        // If one has qty > 1 and the other is qty 1 at a lower price, keep the qty > 1
+        if (a.quantity > 1 && b.quantity === 1 && b.price < a.price) {
+          lineItems.splice(i, 1);
+          break;
+        } else if (b.quantity > 1 && a.quantity === 1 && a.price < b.price) {
+          lineItems.splice(j, 1);
+          i--; // adjust index after splice
+          break;
+        }
+      }
+    }
+  }
+
+  // 5. Infer subtotal from item sum if not detected
+  if (!subtotal && lineItems.length > 0) {
+    subtotal = lineItems.reduce((s, item) => s + item.price, 0);
   }
 
   return { merchantName, currency, lineItems, subtotal, tax, total };
