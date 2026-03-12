@@ -20,6 +20,7 @@ import { generateId, formatCurrency } from "@/lib/utils";
 import { parseReceiptText } from "@/lib/ocr-parser";
 import Colors from "@/constants/colors";
 import type { LineItem, Receipt } from "@/shared/schema";
+import { trackEvent } from "@/lib/analytics";
 
 export default function ReceiptReviewScreen() {
   const insets = useSafeAreaInsets();
@@ -233,6 +234,7 @@ export default function ReceiptReviewScreen() {
         await updateReceipt(receipt);
       } else {
         await addReceipt(receipt);
+        trackEvent("receipt_scanned");
       }
 
       router.push({
