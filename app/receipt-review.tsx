@@ -85,9 +85,9 @@ export default function ReceiptReviewScreen() {
         }))
       );
     }
-    if (data.tax) setTax(data.tax.toString());
-    if (data.total && data.subtotal) {
-      const diff = data.total - data.subtotal - (data.tax || 0);
+    if (data.tax != null) setTax(data.tax.toString());
+    if (data.total != null && data.subtotal != null) {
+      const diff = data.total - data.subtotal - (data.tax ?? 0);
       if (diff > 0) setTip(diff.toFixed(2));
     }
     setPendingImage(null);
