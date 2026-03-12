@@ -17,6 +17,7 @@ import { useApp } from "@/lib/app-context";
 import { formatCurrency, generateId, roundCents } from "@/lib/utils";
 import Colors from "@/constants/colors";
 import type { PaymentRequest } from "@/shared/schema";
+import { trackEvent } from "@/lib/analytics";
 
 function buildPaymentLinks(handles: { venmo?: string; paypal?: string; cashapp?: string }, amount: number): string {
   const links: string[] = [];
@@ -149,9 +150,11 @@ export default function PaymentSummaryScreen() {
   const buildShareMessageForPayer = (payerName: string) => {
     const amount = breakdown[payerName]?.total || 0;
     const payLinks = buildPaymentLinks(paymentHandles, amount);
+    const base = `Hey ${payerName}! You owe ${formatCurrency(amount, receipt.currency)} for ${receipt.merchantName || "our meal"}.`;
+    const footer = "\n\nSplit with BillBreeze — free receipt scanning, no limits\nhttps://apps.apple.com/app/billbreeze/id__APPID__";
     return payLinks
-      ? `Hey ${payerName}! You owe ${formatCurrency(amount, receipt.currency)} for ${receipt.merchantName || "our meal"}.${payLinks}`
-      : `Hey ${payerName}! You owe ${formatCurrency(amount, receipt.currency)} for ${receipt.merchantName || "our meal"}. Thanks!`;
+      ? `${base}${payLinks}${footer}`
+      : `${base} Thanks!${footer}`;
   };
 
   const handleShare = async (payerName: string) => {
@@ -167,6 +170,7 @@ export default function PaymentSummaryScreen() {
       return;
     }
 
+    trackEvent("payment_request_sent");
     shareMessage(message, title);
   };
 
@@ -193,7 +197,8 @@ export default function PaymentSummaryScreen() {
       paySection = "\n\nPay here:\n" + linkLines.join("\n");
     }
 
-    return `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total, receipt.currency)}${paySection}`;
+    const footer = "\n\nSplit with BillBreeze — free receipt scanning, no limits\nhttps://apps.apple.com/app/billbreeze/id__APPID__";
+    return `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total, receipt.currency)}${paySection}${footer}`;
   };
 
   const handleShareAll = async () => {
@@ -209,6 +214,7 @@ export default function PaymentSummaryScreen() {
       return;
     }
 
+    trackEvent("payment_request_sent", receipt.payers.length);
     shareMessage(message, title);
   };
 
@@ -247,6 +253,7 @@ export default function PaymentSummaryScreen() {
       }));
 
       await addPaymentRequests(requests);
+      trackEvent("split_completed");
       Alert.alert(
         "Requests Saved",
         `${requests.length} payment requests have been saved to your inbox.`,
