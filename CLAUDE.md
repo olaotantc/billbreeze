@@ -40,7 +40,7 @@ components/
 constants/
   colors.ts           # Design tokens (teal #004E45, gold #F0B429)
 tests/
-  parser.test.ts      # OCR parser test suite (53 cases, 48 pass, 5 pre-existing failures)
+  parser.test.ts      # OCR parser test suite (53 cases, 48 pass, 5 known edge-case failures)
 ```
 
 ## Key Data Models (shared/schema.ts)

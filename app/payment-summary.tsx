@@ -18,6 +18,7 @@ import { formatCurrency, generateId, roundCents } from "@/lib/utils";
 import Colors from "@/constants/colors";
 import type { PaymentRequest } from "@/shared/schema";
 import { trackEvent } from "@/lib/analytics";
+import { SHARE_FOOTER } from "@/constants/app";
 
 function buildPaymentLinks(handles: { venmo?: string; paypal?: string; cashapp?: string }, amount: number): string {
   const links: string[] = [];
@@ -151,7 +152,7 @@ export default function PaymentSummaryScreen() {
     const amount = breakdown[payerName]?.total || 0;
     const payLinks = buildPaymentLinks(paymentHandles, amount);
     const base = `Hey ${payerName}! You owe ${formatCurrency(amount, receipt.currency)} for ${receipt.merchantName || "our meal"}.`;
-    const footer = "\n\nSplit with BillBreeze — free receipt scanning, no limits\nhttps://apps.apple.com/app/billbreeze/id__APPID__";
+    const footer = SHARE_FOOTER;
     return payLinks
       ? `${base}${payLinks}${footer}`
       : `${base} Thanks!${footer}`;
@@ -197,7 +198,7 @@ export default function PaymentSummaryScreen() {
       paySection = "\n\nPay here:\n" + linkLines.join("\n");
     }
 
-    const footer = "\n\nSplit with BillBreeze — free receipt scanning, no limits\nhttps://apps.apple.com/app/billbreeze/id__APPID__";
+    const footer = SHARE_FOOTER;
     return `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total, receipt.currency)}${paySection}${footer}`;
   };
 

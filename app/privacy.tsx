@@ -81,10 +81,14 @@ export default function PrivacyPolicyScreen() {
 
         <Section title="Third-Party Services">
           <P>
-            BillBreeze does not use analytics, advertising, or tracking
-            services. When you share a payment request, BillBreeze uses your
-            device's built-in share functionality — we do not see or store
-            the messages you send.
+            BillBreeze does not use third-party analytics SDKs, advertising,
+            or cross-app tracking services. The app maintains simple on-device
+            usage counters (for example, how often certain features are used) to
+            help us improve the experience; these counters are stored only on
+            your device, are not linked to your identity, and are never sent to
+            any server or shared with third parties. When you share a payment
+            request, BillBreeze uses your device's built-in share functionality
+            — we do not see or store the messages you send.
           </P>
         </Section>
 

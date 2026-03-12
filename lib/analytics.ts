@@ -17,15 +17,19 @@ const DEFAULT_DATA: AnalyticsData = {
   payment_marked_paid: 0,
 };
 
-export async function trackEvent(event: AnalyticsEvent, count: number = 1): Promise<void> {
-  try {
-    const raw = await AsyncStorage.getItem(ANALYTICS_KEY);
-    const data: AnalyticsData = raw ? JSON.parse(raw) : { ...DEFAULT_DATA };
-    data[event] = (data[event] || 0) + count;
-    await AsyncStorage.setItem(ANALYTICS_KEY, JSON.stringify(data));
-  } catch {
-    // Analytics should never break the app
-  }
+let writeQueue: Promise<void> = Promise.resolve();
+
+export function trackEvent(event: AnalyticsEvent, count: number = 1): void {
+  writeQueue = writeQueue.then(async () => {
+    try {
+      const raw = await AsyncStorage.getItem(ANALYTICS_KEY);
+      const data: AnalyticsData = raw ? JSON.parse(raw) : { ...DEFAULT_DATA };
+      data[event] = (data[event] || 0) + count;
+      await AsyncStorage.setItem(ANALYTICS_KEY, JSON.stringify(data));
+    } catch {
+      // Analytics should never break the app
+    }
+  });
 }
 
 export async function getAnalytics(): Promise<AnalyticsData> {

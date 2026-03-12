@@ -16,7 +16,7 @@
 | Receipt scanning (gallery import) | Done | `app/(tabs)/index.tsx` |
 | JPEG conversion (HEIC fix) | Done | `app/camera.tsx` |
 | On-device OCR (ML Kit) | Done | `app/receipt-review.tsx`, `lib/ocr-parser.ts` |
-| Receipt text parser | Done | `lib/ocr-parser.ts` (53 tests, 48 passing) |
+| Receipt text parser | Done | `lib/ocr-parser.ts` (53 tests, 48 passing, 5 known edge-case failures) |
 | Manual item editing | Done | `app/receipt-review.tsx` |
 | Equal bill split | Done | `app/split-config.tsx`, `app/payment-summary.tsx` |
 | Itemized bill split | Done | `app/payer-assignment.tsx`, `app/payment-summary.tsx` |
@@ -67,7 +67,7 @@
 | QR code generation | Low | Alternative to text sharing |
 | Custom percentage split | Low | PRD spec, not user-requested |
 | CSV/PDF export | Low | Business expense reporting |
-| Analytics/telemetry | Low | Usage tracking |
+| Analytics/telemetry | Done (local) | On-device counters in `lib/analytics.ts` |
 | Contacts integration | Low | Prefill payers from device contacts |
 
 ---
