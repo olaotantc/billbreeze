@@ -291,13 +291,15 @@ export default function SplitConfigScreen() {
               payers.length < 2 && styles.continueTextDisabled,
             ]}
           >
-            {splitMode === "itemized" ? "Assign Items" : "View Summary"}
+            {isSaving ? "Saving..." : splitMode === "itemized" ? "Assign Items" : "View Summary"}
           </Text>
-          <Feather
-            name="arrow-right"
-            size={20}
-            color={payers.length < 2 ? Colors.textTertiary : Colors.white}
-          />
+          {!isSaving && (
+            <Feather
+              name="arrow-right"
+              size={20}
+              color={payers.length < 2 ? Colors.textTertiary : Colors.white}
+            />
+          )}
         </Pressable>
       </View>
     </KeyboardAvoidingView>
