@@ -14,6 +14,7 @@ import { useApp } from "@/lib/app-context";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import Colors from "@/constants/colors";
 import type { PaymentRequest } from "@/shared/schema";
+import { trackEvent } from "@/lib/analytics";
 
 export default function InboxScreen() {
   const insets = useSafeAreaInsets();
@@ -26,6 +27,10 @@ export default function InboxScreen() {
   const handleToggle = (id: string) => {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    const request = paymentRequests.find((r) => r.id === id);
+    if (request?.status === "pending") {
+      trackEvent("payment_marked_paid");
     }
     toggleRequestStatus(id);
   };
@@ -64,7 +69,7 @@ export default function InboxScreen() {
             item.status === "paid" && styles.paidAmount,
           ]}
         >
-          {formatCurrency(item.amount)}
+          {formatCurrency(item.amount, item.currency)}
         </Text>
         <View
           style={[

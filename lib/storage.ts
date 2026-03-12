@@ -50,6 +50,10 @@ export async function getReceipts(): Promise<Receipt[]> {
   return receipts.map((r) => ({
     ...r,
     currency: r.currency || "$",
+    subtotal: r.subtotal ?? 0,
+    tax: r.tax ?? 0,
+    tip: r.tip ?? 0,
+    total: r.total ?? 0,
     includeTax: r.includeTax !== false,
     includeTip: r.includeTip !== false,
     lineItems: (r.lineItems || []).map((item) => ({
@@ -79,7 +83,11 @@ export async function deleteReceipt(id: string): Promise<void> {
 
 export async function getPaymentRequests(): Promise<PaymentRequest[]> {
   const data = await AsyncStorage.getItem(REQUESTS_KEY);
-  return safeParse(data, []);
+  const requests = safeParse<PaymentRequest[]>(data, []);
+  return requests.map((r) => ({
+    ...r,
+    currency: r.currency || "$",
+  }));
 }
 
 export async function savePaymentRequest(request: PaymentRequest): Promise<void> {

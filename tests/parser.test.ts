@@ -1,4 +1,4 @@
-import { parseReceiptText } from "../server/routes";
+import { parseReceiptText } from "../lib/ocr-parser";
 
 // ── Simple test runner ──────────────────────────────────────────────────────
 let passed = 0;
@@ -624,6 +624,47 @@ describe("12. Mixed formatting - real-world messy receipt", () => {
     assertEqual(result.merchantName, "Downtown Deli", "merchant");
     assert(result.lineItems.length >= 2, "at least 2 items parsed");
     assertEqual(result.total, 19.50, "total");
+  });
+});
+
+// ── Nigerian receipt tests ─────────────────────────────────────────────────
+describe("Nigerian receipts", () => {
+  test("parses Nigerian restaurant receipt with Naira and postal code noise", () => {
+    const text = [
+      "THE GRID RESTAURANT AND WINERY",
+      "RORA POOLBAR",
+      "Lagos 100281",
+      "",
+      "Long Island ₦19,000.00",
+      "OLD FASHION",
+      "2 x 16,000.00",
+      "32,000.00",
+      "GRILLED PRAWNS ₦39,500.00",
+      "RORA COASTAL SEAFOOD ₦33,000.00",
+      "Water ₦2,500.00",
+      "Sub Total ₦126,000.00",
+      "Consumption tax 5.0% ₦6,300.00",
+      "Bill Amount ₦132,300.00",
+    ].join("\n");
+
+    const result = parseReceiptText(text);
+
+    assertEqual(result.currency, "₦", "currency");
+    assert(
+      result.merchantName.includes("GRID") || result.merchantName.includes("RESTAURANT"),
+      "merchant contains GRID or RESTAURANT"
+    );
+    // Should NOT include "Lagos" as a line item
+    const lagosItem = result.lineItems.find((i) => /lagos/i.test(i.name));
+    assertEqual(lagosItem, undefined, "Lagos should not be a line item");
+    // Should NOT include "Bill Amount" as a line item
+    const billItem = result.lineItems.find((i) => /bill\s*amount/i.test(i.name));
+    assertEqual(billItem, undefined, "Bill Amount should not be a line item");
+    // Should have 4-5 real items
+    assert(result.lineItems.length >= 4, `item count >= 4, got ${result.lineItems.length}`);
+    assertEqual(result.subtotal, 126000, "subtotal");
+    assertEqual(result.tax, 6300, "tax");
+    assertEqual(result.total, 132300, "total");
   });
 });
 

@@ -1,258 +1,77 @@
+/**
+ * Minimal Express server for Expo Go development only.
+ * Proxies images to Google Cloud Vision API for OCR.
+ * Not used in production — production uses on-device ML Kit.
+ *
+ * Usage: npm run server:dev
+ * Requires: GOOGLE_CLOUD_VISION_API_KEY in .env
+ */
 import express from "express";
-import type { Request, Response, NextFunction } from "express";
-import helmet from "helmet";
-import rateLimit from "express-rate-limit";
-import { registerRoutes } from "./routes";
-import * as fs from "fs";
-import * as path from "path";
+import { parseReceiptText } from "../lib/ocr-parser";
 
 const app = express();
-const log = console.log;
+app.use(express.json({ limit: "10mb" }));
 
-declare module "http" {
-  interface IncomingMessage {
-    rawBody: unknown;
-  }
-}
-
-function setupCors(app: express.Application) {
-  app.use((req, res, next) => {
-    const origins = new Set<string>();
-
-    if (process.env.REPLIT_DEV_DOMAIN) {
-      origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
-    }
-
-    if (process.env.REPLIT_DOMAINS) {
-      process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
-        origins.add(`https://${d.trim()}`);
-      });
-    }
-
-    const origin = req.header("origin");
-
-    // Allow localhost origins for Expo web development (any port)
-    const isLocalhost =
-      origin?.startsWith("http://localhost:") ||
-      origin?.startsWith("http://127.0.0.1:");
-
-    if (origin && (origins.has(origin) || isLocalhost)) {
-      res.header("Access-Control-Allow-Origin", origin);
-      res.header(
-        "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS",
-      );
-      res.header("Access-Control-Allow-Headers", "Content-Type");
-      res.header("Access-Control-Allow-Credentials", "true");
-    }
-
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(200);
-    }
-
-    next();
-  });
-}
-
-function setupBodyParsing(app: express.Application) {
-  app.use(
-    express.json({
-      limit: "10mb",
-      verify: (req, _res, buf) => {
-        req.rawBody = buf;
-      },
-    }),
-  );
-
-  app.use(express.urlencoded({ extended: false, limit: "10mb" }));
-}
-
-function setupRequestLogging(app: express.Application) {
-  app.use((req, res, next) => {
-    const start = Date.now();
-    const path = req.path;
-    let capturedJsonResponse: Record<string, unknown> | undefined = undefined;
-
-    const originalResJson = res.json;
-    res.json = function (bodyJson, ...args) {
-      capturedJsonResponse = bodyJson;
-      return originalResJson.apply(res, [bodyJson, ...args]);
-    };
-
-    res.on("finish", () => {
-      if (!path.startsWith("/api")) return;
-
-      const duration = Date.now() - start;
-
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
-    });
-
-    next();
-  });
-}
-
-function getAppName(): string {
+app.post("/api/ocr/parse", async (req, res) => {
   try {
-    const appJsonPath = path.resolve(process.cwd(), "app.json");
-    const appJsonContent = fs.readFileSync(appJsonPath, "utf-8");
-    const appJson = JSON.parse(appJsonContent);
-    return appJson.expo?.name || "App Landing Page";
-  } catch {
-    return "App Landing Page";
+    let { imageBase64 } = req.body;
+    if (!imageBase64 || typeof imageBase64 !== "string") {
+      return res.status(400).json({ error: "imageBase64 is required" });
+    }
+
+    // Strip data URI prefix
+    if (imageBase64.includes(",")) {
+      imageBase64 = imageBase64.split(",")[1];
+    }
+    imageBase64 = imageBase64.replace(/\s/g, "");
+
+    const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: "GOOGLE_CLOUD_VISION_API_KEY not set in .env" });
+    }
+
+    const visionResponse = await fetch(
+      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requests: [{
+            image: { content: imageBase64 },
+            features: [{ type: "DOCUMENT_TEXT_DETECTION", maxResults: 1 }],
+          }],
+        }),
+      }
+    );
+
+    if (!visionResponse.ok) {
+      console.error("Vision API error:", visionResponse.status);
+      return res.status(500).json({ error: "OCR service error" });
+    }
+
+    const visionData = await visionResponse.json() as any;
+    const annotation = visionData.responses?.[0];
+    const fullText = annotation?.fullTextAnnotation?.text || annotation?.textAnnotations?.[0]?.description || "";
+
+    console.log("[OCR RAW TEXT] ─────────────────────────");
+    console.log(fullText);
+    console.log("─────────────────────────────────────────");
+
+    const parsed = parseReceiptText(fullText);
+
+    console.log("[OCR PARSED] ───────────────────────────");
+    console.log(JSON.stringify(parsed, null, 2));
+    console.log("─────────────────────────────────────────");
+
+    return res.json(parsed);
+  } catch (error) {
+    console.error("OCR parse error:", error);
+    return res.status(500).json({ error: "Failed to parse receipt" });
   }
-}
+});
 
-function serveExpoManifest(platform: string, res: Response) {
-  const manifestPath = path.resolve(
-    process.cwd(),
-    "static-build",
-    platform,
-    "manifest.json",
-  );
-
-  if (!fs.existsSync(manifestPath)) {
-    return res
-      .status(404)
-      .json({ error: `Manifest not found for platform: ${platform}` });
-  }
-
-  res.setHeader("expo-protocol-version", "1");
-  res.setHeader("expo-sfv-version", "0");
-  res.setHeader("content-type", "application/json");
-
-  const manifest = fs.readFileSync(manifestPath, "utf-8");
-  res.send(manifest);
-}
-
-function serveLandingPage({
-  req,
-  res,
-  landingPageTemplate,
-  appName,
-}: {
-  req: Request;
-  res: Response;
-  landingPageTemplate: string;
-  appName: string;
-}) {
-  const forwardedProto = req.header("x-forwarded-proto");
-  const protocol = forwardedProto || req.protocol || "https";
-  const forwardedHost = req.header("x-forwarded-host");
-  const host = forwardedHost || req.get("host");
-  const baseUrl = `${protocol}://${host}`;
-  const expsUrl = `${host}`;
-
-  log(`baseUrl`, baseUrl);
-  log(`expsUrl`, expsUrl);
-
-  const html = landingPageTemplate
-    .replace(/BASE_URL_PLACEHOLDER/g, baseUrl)
-    .replace(/EXPS_URL_PLACEHOLDER/g, expsUrl)
-    .replace(/APP_NAME_PLACEHOLDER/g, appName);
-
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.status(200).send(html);
-}
-
-function configureExpoAndLanding(app: express.Application) {
-  const templatePath = path.resolve(
-    process.cwd(),
-    "server",
-    "templates",
-    "landing-page.html",
-  );
-  const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
-  const appName = getAppName();
-
-  log("Serving static Expo files with dynamic manifest routing");
-
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith("/api")) {
-      return next();
-    }
-
-    if (req.path !== "/" && req.path !== "/manifest") {
-      return next();
-    }
-
-    const platform = req.header("expo-platform");
-    if (platform && (platform === "ios" || platform === "android")) {
-      return serveExpoManifest(platform, res);
-    }
-
-    if (req.path === "/") {
-      return serveLandingPage({
-        req,
-        res,
-        landingPageTemplate,
-        appName,
-      });
-    }
-
-    next();
-  });
-
-  app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
-  app.use(express.static(path.resolve(process.cwd(), "static-build")));
-
-  log("Expo routing: Checking expo-platform header on / and /manifest");
-}
-
-function setupErrorHandler(app: express.Application) {
-  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
-    const error = err as {
-      status?: number;
-      statusCode?: number;
-      message?: string;
-    };
-
-    const status = error.status || error.statusCode || 500;
-    const message = error.message || "Internal Server Error";
-
-    console.error("Internal Server Error:", err);
-
-    if (res.headersSent) {
-      return next(err);
-    }
-
-    return res.status(status).json({ message });
-  });
-}
-
-(async () => {
-  app.use(helmet());
-  setupCors(app);
-  setupBodyParsing(app);
-  setupRequestLogging(app);
-
-  const ocrLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 10,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Too many requests, please try again later" },
-  });
-  app.use("/api/ocr", ocrLimiter);
-
-  if (process.env.NODE_ENV === "production") {
-    configureExpoAndLanding(app);
-  }
-
-  const server = await registerRoutes(app);
-
-  setupErrorHandler(app);
-
-  const port = parseInt(process.env.PORT || "8080", 10);
-  server.listen(port, () => {
-    log(`express server serving on port ${port}`);
-  });
-})();
+const PORT = 8080;
+app.listen(PORT, () => {
+  console.log(`[DEV] OCR server running on http://localhost:${PORT}`);
+  console.log("[DEV] This server is for Expo Go testing only. Production uses on-device ML Kit.");
+});

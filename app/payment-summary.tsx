@@ -17,6 +17,8 @@ import { useApp } from "@/lib/app-context";
 import { formatCurrency, generateId, roundCents } from "@/lib/utils";
 import Colors from "@/constants/colors";
 import type { PaymentRequest } from "@/shared/schema";
+import { trackEvent } from "@/lib/analytics";
+import { SHARE_FOOTER } from "@/constants/app";
 
 function buildPaymentLinks(handles: { venmo?: string; paypal?: string; cashapp?: string }, amount: number): string {
   const links: string[] = [];
@@ -67,7 +69,7 @@ export default function PaymentSummaryScreen() {
     });
 
     if (receipt.splitMode === "equal") {
-      const baseAmount = roundCents(receipt.total / receipt.payers.length);
+      const baseAmount = Math.floor((receipt.total / receipt.payers.length) * 100) / 100;
       const remainder = roundCents(receipt.total - baseAmount * receipt.payers.length);
       receipt.payers.forEach((p, i) => {
         const amount = i === 0 ? baseAmount + remainder : baseAmount;
@@ -77,7 +79,7 @@ export default function PaymentSummaryScreen() {
     } else if (receipt.splitMode === "itemized") {
       receipt.lineItems.forEach((item) => {
         if (item.assignedTo.length > 0) {
-          const baseShare = roundCents(item.price / item.assignedTo.length);
+          const baseShare = Math.floor((item.price / item.assignedTo.length) * 100) / 100;
           const remainder = roundCents(item.price - baseShare * item.assignedTo.length);
           item.assignedTo.forEach((p, i) => {
             if (breakdown[p]) {
@@ -149,9 +151,11 @@ export default function PaymentSummaryScreen() {
   const buildShareMessageForPayer = (payerName: string) => {
     const amount = breakdown[payerName]?.total || 0;
     const payLinks = buildPaymentLinks(paymentHandles, amount);
+    const base = `Hey ${payerName}! You owe ${formatCurrency(amount, receipt.currency)} for ${receipt.merchantName || "our meal"}.`;
+    const footer = SHARE_FOOTER;
     return payLinks
-      ? `Hey ${payerName}! You owe ${formatCurrency(amount, receipt.currency)} for ${receipt.merchantName || "our meal"}.${payLinks}`
-      : `Hey ${payerName}! You owe ${formatCurrency(amount, receipt.currency)} for ${receipt.merchantName || "our meal"}. Thanks!`;
+      ? `${base}${payLinks}${footer}`
+      : `${base} Thanks!${footer}`;
   };
 
   const handleShare = async (payerName: string) => {
@@ -167,6 +171,7 @@ export default function PaymentSummaryScreen() {
       return;
     }
 
+    trackEvent("payment_request_sent");
     shareMessage(message, title);
   };
 
@@ -193,7 +198,8 @@ export default function PaymentSummaryScreen() {
       paySection = "\n\nPay here:\n" + linkLines.join("\n");
     }
 
-    return `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total, receipt.currency)}${paySection}`;
+    const footer = SHARE_FOOTER;
+    return `Bill Split for ${receipt.merchantName || "our meal"}\n\n${lines}\n\nTotal: ${formatCurrency(receipt.total, receipt.currency)}${paySection}${footer}`;
   };
 
   const handleShareAll = async () => {
@@ -209,6 +215,7 @@ export default function PaymentSummaryScreen() {
       return;
     }
 
+    trackEvent("payment_request_sent", receipt.payers.length);
     shareMessage(message, title);
   };
 
@@ -241,11 +248,13 @@ export default function PaymentSummaryScreen() {
         receiptId: receipt.id,
         payerName: payer,
         amount: Math.round((breakdown[payer]?.total || 0) * 100) / 100,
+        currency: receipt.currency || "$",
         status: "pending" as const,
         createdAt: new Date().toISOString(),
       }));
 
       await addPaymentRequests(requests);
+      trackEvent("split_completed");
       Alert.alert(
         "Requests Saved",
         `${requests.length} payment requests have been saved to your inbox.`,

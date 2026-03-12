@@ -1,98 +1,8 @@
-import type { Express, Request, Response } from "express";
-import { createServer, type Server } from "node:http";
-
-export async function registerRoutes(app: Express): Promise<Server> {
-  app.post("/api/ocr/parse", async (req: Request, res: Response) => {
-    try {
-      if (!req.body || typeof req.body !== "object") {
-        return res.status(400).json({ error: "Request body is required with Content-Type: application/json" });
-      }
-
-      let { imageBase64 } = req.body;
-
-      if (!imageBase64 || typeof imageBase64 !== "string") {
-        return res.status(400).json({ error: "imageBase64 is required and must be a string" });
-      }
-
-      console.log("[OCR-DEBUG] Raw base64 length:", imageBase64.length);
-      console.log("[OCR-DEBUG] Raw base64 first 80:", imageBase64.substring(0, 80));
-
-      // Strip data URI prefix if present
-      if (imageBase64.includes(",")) {
-        imageBase64 = imageBase64.split(",")[1];
-        console.log("[OCR-DEBUG] Stripped data URI prefix, new length:", imageBase64.length);
-      }
-
-      const base64Pattern = /^[A-Za-z0-9+/=\s]+$/;
-      if (!base64Pattern.test(imageBase64)) {
-        return res.status(400).json({ error: "imageBase64 contains invalid characters" });
-      }
-
-      imageBase64 = imageBase64.replace(/\s/g, "");
-      console.log("[OCR-DEBUG] After whitespace cleanup, length:", imageBase64.length);
-
-      const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ error: "Google Cloud Vision API key not configured" });
-      }
-
-      const visionResponse = await fetch(
-        `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            requests: [
-              {
-                image: { content: imageBase64 },
-                features: [
-                  { type: "DOCUMENT_TEXT_DETECTION", maxResults: 1 },
-                  { type: "TEXT_DETECTION", maxResults: 1 },
-                ],
-              },
-            ],
-          }),
-        }
-      );
-
-      if (!visionResponse.ok) {
-        const errorText = await visionResponse.text();
-        console.error("Vision API error (status " + visionResponse.status + "):", errorText);
-        return res.status(500).json({ error: "OCR service error" });
-      }
-
-      const visionData = await visionResponse.json() as {
-        responses?: Array<{
-          textAnnotations?: Array<{ description?: string }>;
-          fullTextAnnotation?: { text?: string };
-          error?: { message?: string };
-        }>;
-      };
-
-      const annotation = visionData.responses?.[0];
-      if (annotation?.error) {
-        console.error("Vision annotation error:", annotation.error.message);
-        return res.status(500).json({ error: "OCR processing failed" });
-      }
-
-      const fullText = annotation?.fullTextAnnotation?.text || annotation?.textAnnotations?.[0]?.description || "";
-      console.log("OCR raw text length:", fullText.length, "chars");
-      if (fullText.length > 0) {
-        console.log("OCR first 200 chars:", fullText.substring(0, 200));
-      }
-      const parsed = parseReceiptText(fullText);
-      console.log("Parsed result:", JSON.stringify({ merchantName: parsed.merchantName, items: parsed.lineItems.length, subtotal: parsed.subtotal, tax: parsed.tax, total: parsed.total }));
-
-      return res.json(parsed);
-    } catch (error) {
-      console.error("OCR parse error:", error);
-      return res.status(500).json({ error: "Failed to parse receipt" });
-    }
-  });
-
-  const httpServer = createServer(app);
-  return httpServer;
-}
+/**
+ * Receipt text parser — extracted from server/routes.ts for on-device use.
+ * Pure function: takes raw OCR text, returns structured receipt data.
+ * Tested by tests/parser.test.ts (52 cases).
+ */
 
 export function parseReceiptText(text: string): {
   merchantName: string;
@@ -172,8 +82,8 @@ export function parseReceiptText(text: string): {
   // Quantity line: "2 x 380.00" or "3 @ 12.50"
   const qtyPricePattern = /^(\d+)\s*[xX@]\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+\.\d{1,2}|\d+)$/;
   const subtotalPattern = /sub\s*-?\s*total/i;
-  const taxPattern = /\btax(?:es)?\b|\bhst\b|\bgst\b|\bpst\b|\bvat\b|\bctl\b/i;
-  const totalPattern = /\btotal\b|\bamount\s*due\b|\bbalance\s*due\b/i;
+  const taxPattern = /\btax(?:es)?\b|\bhst\b|\bgst\b|\bpst\b|\bvat\b|\bctl\b|\bconsumption\s*tax\b/i;
+  const totalPattern = /\btotal\b|\bamount\s*due\b|\bbalance\s*due\b|\bbill\s*amount\b/i;
   const tipPattern = /\btip\b|\bgratuity\b/i;
 
   const parsePrice = (s: string): number => {
@@ -204,6 +114,10 @@ export function parseReceiptText(text: string): {
       // "Test Receipt", "OCR App", etc.
       /\btest\s+receipt\b/i,
       /\bdining\s+with\b/i,
+      // City/location + postal code: "Lagos 100281", "Abuja 900001"
+      /^[A-Z][a-zA-Z\s]+\d{5,6}\s*$/,
+      // Standalone city names (common on Nigerian/international receipts)
+      /^(Lagos|Abuja|Ikeja|Lekki|Victoria\s*Island|Ikoyi|Port\s*Harcourt|Ibadan|Kano|Accra|Nairobi|Dar\s*es\s*Salaam)\s*$/i,
     ];
     return noisePatterns.some((p) => p.test(line));
   };
@@ -401,9 +315,72 @@ export function parseReceiptText(text: string): {
     }
   }
 
-  console.log("[PARSER] Result:", JSON.stringify({ merchantName, currency, items: lineItems.length, subtotal, tax, total }));
-  if (lineItems.length > 0) {
-    console.log("[PARSER] Items:", JSON.stringify(lineItems));
+  // ── Post-processing sanity checks ─────────────────────────────────────────
+
+  // 1. Remove items whose name matches a known summary/total pattern
+  //    (catches cases where regex didn't match inline, e.g. split across OCR blocks)
+  for (let i = lineItems.length - 1; i >= 0; i--) {
+    const n = lineItems[i].name;
+    if (totalPattern.test(n) || /\bbill\b/i.test(n)) {
+      if (!total) total = lineItems[i].price;
+      lineItems.splice(i, 1);
+    } else if (subtotalPattern.test(n)) {
+      if (!subtotal) subtotal = lineItems[i].price;
+      lineItems.splice(i, 1);
+    } else if (taxPattern.test(n) && !tipPattern.test(n)) {
+      if (!tax) tax = lineItems[i].price;
+      lineItems.splice(i, 1);
+    } else if (tipPattern.test(n)) {
+      lineItems.splice(i, 1);
+    }
+  }
+
+  // 2. If we have a total, remove items whose price >= total AND the item sum
+  //    (these are almost certainly misclassified summary lines, not real items)
+  if (total && total > 0 && lineItems.length > 1) {
+    const itemSum = lineItems.reduce((s, item) => s + item.price, 0);
+    for (let i = lineItems.length - 1; i >= 0; i--) {
+      if (lineItems[i].price >= total && lineItems[i].price >= itemSum * 0.5) {
+        lineItems.splice(i, 1);
+      }
+    }
+  }
+
+  // 3. Filter items that look like addresses/locations: single word with no price context
+  //    that have a suspiciously round postal-code-like price (5-6 digit integer)
+  for (let i = lineItems.length - 1; i >= 0; i--) {
+    const item = lineItems[i];
+    const priceStr = item.price.toString();
+    const isSingleWord = item.name.trim().split(/\s+/).length === 1;
+    const isPostalCodePrice = /^\d{5,6}$/.test(priceStr) && item.price % 1 === 0;
+    if (isSingleWord && isPostalCodePrice) {
+      lineItems.splice(i, 1);
+    }
+  }
+
+  // 4. Deduplicate: if two items have the same name and one is qty 1 at the unit price
+  //    while another has qty > 1 at qty * unitPrice, keep only the qty > 1 entry
+  for (let i = lineItems.length - 1; i >= 0; i--) {
+    for (let j = 0; j < i; j++) {
+      if (lineItems[i].name === lineItems[j].name) {
+        const a = lineItems[j];
+        const b = lineItems[i];
+        // If one has qty > 1 and the other is qty 1 at a lower price, keep the qty > 1
+        if (a.quantity > 1 && b.quantity === 1 && b.price < a.price) {
+          lineItems.splice(i, 1);
+          break;
+        } else if (b.quantity > 1 && a.quantity === 1 && a.price < b.price) {
+          lineItems.splice(j, 1);
+          i--; // adjust index after splice
+          break;
+        }
+      }
+    }
+  }
+
+  // 5. Infer subtotal from item sum if not detected
+  if (!subtotal && lineItems.length > 0) {
+    subtotal = lineItems.reduce((s, item) => s + item.price, 0);
   }
 
   return { merchantName, currency, lineItems, subtotal, tax, total };

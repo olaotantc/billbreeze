@@ -112,7 +112,7 @@ export default function PayerAssignmentScreen() {
     receipt.lineItems.forEach((item) => {
       const assignedPayers = assignments[item.id] || [];
       if (assignedPayers.length > 0) {
-        const baseShare = roundCents(item.price / assignedPayers.length);
+        const baseShare = Math.floor((item.price / assignedPayers.length) * 100) / 100;
         const remainder = roundCents(item.price - baseShare * assignedPayers.length);
         assignedPayers.forEach((p, i) => {
           totals[p] = (totals[p] || 0) + (i === 0 ? baseShare + remainder : baseShare);
@@ -124,6 +124,11 @@ export default function PayerAssignmentScreen() {
     const effectiveTip = receipt.includeTip !== false ? receipt.tip : 0;
     const taxTipTotal = effectiveTax + effectiveTip;
     const subtotal = receipt.subtotal ?? receipt.lineItems.reduce((s, i) => s + i.price, 0);
+
+    // Round subtotals before computing tax/tip proportions
+    Object.keys(totals).forEach((p) => {
+      totals[p] = roundCents(totals[p]);
+    });
 
     if (subtotal > 0 && taxTipTotal > 0) {
       const payers = Object.keys(totals);

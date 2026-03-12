@@ -31,6 +31,7 @@ export const paymentRequestSchema = z.object({
   receiptId: z.string(),
   payerName: z.string(),
   amount: z.number(),
+  currency: z.string().default("$"),
   status: z.enum(["pending", "paid"]).default("pending"),
   createdAt: z.string(),
 });

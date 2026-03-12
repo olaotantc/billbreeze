@@ -17,9 +17,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useApp } from "@/lib/app-context";
 import { generateId, formatCurrency } from "@/lib/utils";
-import { getApiUrl } from "@/lib/query-client";
+import { parseReceiptText } from "@/lib/ocr-parser";
 import Colors from "@/constants/colors";
 import type { LineItem, Receipt } from "@/shared/schema";
+import { trackEvent } from "@/lib/analytics";
 
 export default function ReceiptReviewScreen() {
   const insets = useSafeAreaInsets();
@@ -42,15 +43,16 @@ export default function ReceiptReviewScreen() {
   const subtotal = lineItems.reduce((sum, item) => sum + item.price, 0);
   const total = subtotal + (parseFloat(tax) || 0) + (parseFloat(tip) || 0);
 
-  const hasInitialized = React.useRef(false);
-  const abortRef = React.useRef<AbortController | null>(null);
+  // Track what we initialized for, so navigating to a different receipt re-initializes
+  const initializedFor = React.useRef<string | null>(null);
 
   useEffect(() => {
-    if (hasInitialized.current) return;
+    const key = receiptId ?? pendingImage?.uri ?? "manual";
+    if (initializedFor.current === key) return;
 
     // Loading an existing receipt
     if (existingReceipt) {
-      hasInitialized.current = true;
+      initializedFor.current = key;
       setMerchantName(existingReceipt.merchantName || "");
       setCurrency(existingReceipt.currency || "$");
       setLineItems(existingReceipt.lineItems || []);
@@ -59,29 +61,52 @@ export default function ReceiptReviewScreen() {
       setScanComplete(true);
       return;
     }
-    // New scan flow
-    if (pendingImage?.base64) {
-      hasInitialized.current = true;
-      const b64 = pendingImage.base64;
-      console.log("[OCR-DEBUG] pendingImage base64 length:", b64.length);
-      scanReceipt(b64);
+    // New scan flow — use on-device OCR
+    if (pendingImage?.uri) {
+      initializedFor.current = key;
+      scanReceiptOnDevice(pendingImage.uri);
     } else if (!pendingImage && !receiptId) {
-      hasInitialized.current = true;
+      initializedFor.current = key;
       setScanComplete(true);
     }
-  }, [existingReceipt, pendingImage]);
+  }, [existingReceipt, pendingImage, receiptId]);
 
-  const scanReceipt = async (base64: string) => {
-    setIsScanning(true);
+  const applyOcrResult = (data: ReturnType<typeof parseReceiptText>) => {
+    setMerchantName(data.merchantName || "");
+    if (data.currency) setCurrency(data.currency);
+    if (data.lineItems && data.lineItems.length > 0) {
+      setLineItems(
+        data.lineItems.map((item: { name: string; quantity?: number; price: number }) => ({
+          id: generateId(),
+          name: item.name,
+          quantity: item.quantity || 1,
+          price: item.price,
+          assignedTo: [],
+        }))
+      );
+    }
+    if (data.tax != null) setTax(data.tax.toString());
+    if (data.total != null && data.subtotal != null) {
+      const diff = data.total - data.subtotal - (data.tax ?? 0);
+      if (diff > 0) setTip(diff.toFixed(2));
+    }
+    setPendingImage(null);
+    setScanComplete(true);
+  };
+
+  const scanViaServer = async (base64: string): Promise<boolean> => {
+    // Dev fallback: POST to Express server running on local machine
+    const Constants = require("expo-constants").default;
+    const debuggerHost =
+      Constants.expoConfig?.hostUri ??
+      (Constants as any).manifest?.debuggerHost;
+    const ip = debuggerHost?.split(":")[0];
+    const baseUrl = ip ? `http://${ip}:8080` : "http://localhost:8080";
+
     try {
-      const baseUrl = getApiUrl();
-      console.log("[OCR-DEBUG] Using API URL:", baseUrl);
-      const url = new URL("/api/ocr/parse", baseUrl);
-      console.log("[OCR-DEBUG] Full request URL:", url.toString());
       const controller = new AbortController();
-      abortRef.current = controller;
-      const timeout = setTimeout(() => controller.abort(), 30000);
-      const response = await fetch(url.toString(), {
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const response = await fetch(`${baseUrl}/api/ocr/parse`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageBase64: base64 }),
@@ -91,41 +116,57 @@ export default function ReceiptReviewScreen() {
 
       if (response.ok) {
         const data = await response.json();
-        setMerchantName(data.merchantName || "");
-        if (data.currency) setCurrency(data.currency);
-        if (data.lineItems && data.lineItems.length > 0) {
-          setLineItems(
-            data.lineItems.map((item: { name: string; quantity?: number; price: number }) => ({
-              id: generateId(),
-              name: item.name,
-              quantity: item.quantity || 1,
-              price: item.price,
-              assignedTo: [],
-            }))
-          );
-        }
-        if (data.tax) setTax(data.tax.toString());
-        if (data.total && data.subtotal) {
-          const diff = data.total - data.subtotal - (data.tax || 0);
-          if (diff > 0) setTip(diff.toFixed(2));
-        }
-        setPendingImage(null);
-        setScanComplete(true);
-      } else {
+        applyOcrResult(data);
+        return true;
+      }
+    } catch (e: any) {
+      console.log("[OCR] Server fallback failed:", e?.message);
+    }
+    return false;
+  };
+
+  const scanReceiptOnDevice = async (imageUri: string) => {
+    setIsScanning(true);
+    try {
+      // Try on-device ML Kit first (works in dev builds + production)
+      const MlkitOcr = require("react-native-mlkit-ocr").default;
+      const ocrResult = await MlkitOcr.detectFromUri(imageUri);
+      const fullText = ocrResult.map((block: { text: string }) => block.text).join("\n");
+
+      if (__DEV__) {
+        console.log("[OCR RAW TEXT] ─────────────────────────");
+        console.log(fullText);
+        console.log("─────────────────────────────────────────");
+      }
+
+      if (fullText.length === 0) {
         setPendingImage(null);
         setScanComplete(true);
         Alert.alert(
           "Scan Issue",
           "Could not read the receipt clearly. You can add items manually."
         );
+        return;
       }
+
+      applyOcrResult(parseReceiptText(fullText));
     } catch (e: any) {
-      console.error("[OCR-ERROR] Fetch failed:", e?.message || e);
-      console.error("[OCR-ERROR] URL was:", getApiUrl() + "/api/ocr/parse");
+      // ML Kit not available (Expo Go) — fall back to server if running
+      console.log("[OCR] ML Kit unavailable, trying server fallback...");
+
+      const base64 = pendingImage?.base64;
+      if (base64) {
+        const serverWorked = await scanViaServer(base64);
+        if (serverWorked) return;
+      }
+
+      setPendingImage(null);
       setScanComplete(true);
       Alert.alert(
         "Scan Issue",
-        `Could not connect to scanning service (${e?.message || "unknown error"}). You can add items manually.`
+        __DEV__
+          ? "ML Kit requires a dev build. Run 'npm run server:dev' for Expo Go testing, or use 'eas build --profile development' for native OCR."
+          : "Could not read the receipt. You can add items manually."
       );
     } finally {
       setIsScanning(false);
@@ -193,6 +234,7 @@ export default function ReceiptReviewScreen() {
         await updateReceipt(receipt);
       } else {
         await addReceipt(receipt);
+        trackEvent("receipt_scanned");
       }
 
       router.push({
@@ -221,7 +263,6 @@ export default function ReceiptReviewScreen() {
               pressed && { opacity: 0.7 },
             ]}
             onPress={() => {
-              abortRef.current?.abort();
               setPendingImage(null);
               setIsScanning(false);
               setScanComplete(true);

@@ -8,6 +8,7 @@ import {
   Platform,
   Alert,
   ScrollView,
+  Linking,
 } from "react-native";
 import { router } from "expo-router";
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -194,9 +195,29 @@ export default function SettingsScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>General</Text>
-          <SettingRow icon="info" label="About BillBreeze" subtitle="Coming soon" />
-          <SettingRow icon="shield" label="Privacy" subtitle="Coming soon" />
-          <SettingRow icon="help-circle" label="Help & Support" subtitle="Coming soon" />
+          <SettingRow
+            icon="info"
+            label="About BillBreeze"
+            subtitle="v1.0.0"
+            onPress={() =>
+              Alert.alert(
+                "BillBreeze",
+                "Snap, Split & Settle Bills.\n\nScan receipts, split costs among friends, and share payment requests instantly.\n\nVersion 1.0.0"
+              )
+            }
+          />
+          <SettingRow
+            icon="shield"
+            label="Privacy Policy"
+            onPress={() => router.push("/privacy" as any)}
+          />
+          <SettingRow
+            icon="help-circle"
+            label="Help & Support"
+            onPress={() =>
+              Linking.openURL("mailto:support@billbreeze.app")
+            }
+          />
         </View>
 
         <View style={styles.section}>
@@ -219,8 +240,18 @@ export default function SettingsScreen() {
   );
 }
 
-function SettingRow({ icon, label, subtitle }: { icon: string; label: string; subtitle?: string }) {
-  return (
+function SettingRow({
+  icon,
+  label,
+  subtitle,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  subtitle?: string;
+  onPress?: () => void;
+}) {
+  const content = (
     <View style={styles.settingRow}>
       <View style={styles.settingRowLeft}>
         <Feather name={icon as any} size={18} color={Colors.textSecondary} />
@@ -233,6 +264,15 @@ function SettingRow({ icon, label, subtitle }: { icon: string; label: string; su
       )}
     </View>
   );
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+        {content}
+      </Pressable>
+    );
+  }
+  return content;
 }
 
 const styles = StyleSheet.create({
