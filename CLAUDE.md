@@ -1,16 +1,16 @@
 # BillBreeze - Project Guide
 
 ## What is BillBreeze?
-A bill-splitting mobile app built with Expo/React Native. Users scan receipts via camera, OCR extracts line items, then split costs equally or per-item among friends. Payment requests are shared via Venmo/PayPal/Cash App links.
+A bill-splitting mobile app built with Expo/React Native. Users scan receipts via camera, on-device OCR extracts line items, then split costs equally or per-item among friends. Payment requests are shared via Venmo/PayPal/Cash App links.
 
 ## Tech Stack
 - **Frontend**: Expo 54, React Native 0.81, TypeScript, Expo Router (file-based)
 - **State**: React Context (`lib/app-context.tsx`) + AsyncStorage for persistence
 - **Queries**: TanStack React Query v5 (retry disabled)
-- **Backend**: Express.js on port 8080
-- **OCR**: Google Cloud Vision API (DOCUMENT_TEXT_DETECTION)
-- **Database**: Drizzle ORM + PostgreSQL configured but **not actively used** - all data in AsyncStorage
+- **OCR**: On-device via `react-native-mlkit-ocr` (free, no server/API keys needed)
+- **Parser**: `lib/ocr-parser.ts` — regex-based text extraction from OCR output
 - **Validation**: Zod schemas in `shared/schema.ts`
+- **No backend required** — fully client-side, zero infrastructure costs
 
 ## Project Structure
 ```
@@ -22,12 +22,12 @@ app/                  # Expo Router screens
   payer-assignment.tsx # Per-item assignment (itemized only)
   payment-summary.tsx # Final breakdown + share/save
   sign-in.tsx         # Local auth (email + name)
+  privacy.tsx         # In-app privacy policy
 server/
-  index.ts            # Express setup, CORS, static serving
-  routes.ts           # POST /api/ocr/parse (Vision API + text parser)
-  storage.ts          # User storage interface (unused)
+  index.ts            # Legacy Express server (app no longer depends on this)
 lib/
   app-context.tsx     # Global state provider (user, receipts, requests, handles)
+  ocr-parser.ts       # Receipt text parser (extracted from old server/routes.ts)
   storage.ts          # AsyncStorage CRUD helpers
   utils.ts            # Price formatting, date formatting
   query-client.ts     # React Query client config
@@ -39,6 +39,8 @@ components/
   KeyboardAwareScrollViewCompat.tsx
 constants/
   colors.ts           # Design tokens (teal #004E45, gold #F0B429)
+tests/
+  parser.test.ts      # OCR parser test suite (53 cases, 48 pass, 5 pre-existing failures)
 ```
 
 ## Key Data Models (shared/schema.ts)
@@ -50,27 +52,24 @@ constants/
 ## User Flow
 1. Welcome screen -> Sign in (email + name, stored locally)
 2. Home tab -> Scan receipt (camera/gallery) -> JPEG conversion
-3. Receipt review -> OCR parse -> manual edit items/prices
+3. Receipt review -> On-device OCR parse -> manual edit items/prices
 4. Split config -> choose equal/itemized, add payers, toggle tax/tip
 5. Payer assignment (itemized only) -> assign items to people
 6. Payment summary -> view breakdown, share via messaging, save requests
 7. Inbox tab -> track pending/paid requests
-
-## API Endpoints
-- `POST /api/ocr/parse` - Takes `{ imageBase64 }`, returns `{ merchantName, lineItems, subtotal?, tax?, total? }`
-
-## Environment Variables
-- `GOOGLE_CLOUD_VISION_API_KEY` - Required for OCR
-- `DATABASE_URL` - PostgreSQL connection (Drizzle, currently unused)
 
 ## AsyncStorage Keys
 - `@billbreeze_receipts`, `@billbreeze_requests`, `@billbreeze_user`, `@billbreeze_payment_handles`
 
 ## Development Commands
 - `npm run start` - Expo dev server
-- `npm run server:dev` - Express backend (port 8080)
-- `npm run db:push` - Drizzle schema push (unused)
+- `npm run test` / `npm run test:parser` - Run OCR parser tests
 - `npm run lint` / `npm run lint:fix` - ESLint
+
+## EAS Build & Submit
+- `eas.json` configured with development, preview, and production profiles
+- `.easignore` configured to exclude non-essential files from builds
+- Submit credentials (appleId, ascAppId, appleTeamId) still need to be filled in `eas.json`
 
 ## Conventions
 - TypeScript strict mode throughout
@@ -78,7 +77,7 @@ constants/
 - Color tokens in `constants/colors.ts` - never use raw hex in screens
 - Inter font family loaded via `@expo-google-fonts/inter`
 - Error boundaries at app root; use `Alert.alert()` for user-facing errors
-- OCR parser has a 52-case test suite; other areas lack tests, so be cautious with refactors
+- OCR parser has a 53-case test suite; other areas lack tests, so be cautious with refactors
 
 ## Known Limitations
 - All data is local-only (AsyncStorage) - lost on uninstall
@@ -87,4 +86,4 @@ constants/
 - OCR parser is regex-based and may miss unusual receipt formats
 - No image saved with receipts (imageUri field unused)
 - React Query retry is disabled
-- Drizzle/PostgreSQL is configured but completely unused
+- `server/` directory still in repo but app doesn't depend on it; Express dep still in package.json (cleanup candidate)
