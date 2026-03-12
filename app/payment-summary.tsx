@@ -167,7 +167,10 @@ export default function PaymentSummaryScreen() {
     const title = `Payment Request - ${receipt.merchantName}`;
 
     if (!hasPaymentHandles) {
-      promptSetupHandles(() => shareMessage(message, title));
+      promptSetupHandles(() => {
+        trackEvent("payment_request_sent");
+        shareMessage(message, title);
+      });
       return;
     }
 
@@ -211,7 +214,10 @@ export default function PaymentSummaryScreen() {
     const title = `Bill Split - ${receipt.merchantName}`;
 
     if (!hasPaymentHandles) {
-      promptSetupHandles(() => shareMessage(message, title));
+      promptSetupHandles(() => {
+        trackEvent("payment_request_sent", receipt.payers.length);
+        shareMessage(message, title);
+      });
       return;
     }
 
