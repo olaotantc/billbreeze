@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -25,16 +25,16 @@ export default function PayerAssignmentScreen() {
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
   const receipt = receipts.find((r) => r.id === receiptId);
-  const [assignments, setAssignments] = useState<Record<string, string[]>>(
-    () => {
-      if (!receipt) return {};
-      const map: Record<string, string[]> = {};
-      receipt.lineItems.forEach((item) => {
-        map[item.id] = item.assignedTo || [];
-      });
-      return map;
-    }
-  );
+  const [assignments, setAssignments] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    if (!receipt) return;
+    const map: Record<string, string[]> = {};
+    receipt.lineItems.forEach((item) => {
+      map[item.id] = item.assignedTo || [];
+    });
+    setAssignments(map);
+  }, [receiptId]);
 
   if (!receipt) {
     return (
