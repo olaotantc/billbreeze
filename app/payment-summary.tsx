@@ -166,12 +166,13 @@ export default function PaymentSummaryScreen() {
     const message = buildShareMessageForPayer(payerName);
     const title = `Payment Request - ${receipt.merchantName}`;
 
+    trackEvent("payment_request_sent");
+
     if (!hasPaymentHandles) {
       promptSetupHandles(() => shareMessage(message, title));
       return;
     }
 
-    trackEvent("payment_request_sent");
     shareMessage(message, title);
   };
 
@@ -210,12 +211,13 @@ export default function PaymentSummaryScreen() {
     const message = buildShareAllMessage();
     const title = `Bill Split - ${receipt.merchantName}`;
 
+    trackEvent("payment_request_sent", receipt.payers.length);
+
     if (!hasPaymentHandles) {
       promptSetupHandles(() => shareMessage(message, title));
       return;
     }
 
-    trackEvent("payment_request_sent", receipt.payers.length);
     shareMessage(message, title);
   };
 
