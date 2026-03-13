@@ -26,6 +26,7 @@ export default function PayerAssignmentScreen() {
 
   const receipt = receipts.find((r) => r.id === receiptId);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
+  const lineItemIds = receipt?.lineItems.map((i) => i.id).join(",") ?? "";
 
   useEffect(() => {
     if (!receipt) return;
@@ -34,7 +35,7 @@ export default function PayerAssignmentScreen() {
       map[item.id] = item.assignedTo || [];
     });
     setAssignments(map);
-  }, [receiptId]);
+  }, [receiptId, lineItemIds]);
 
   if (!receipt) {
     return (
