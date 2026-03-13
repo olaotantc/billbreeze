@@ -21,8 +21,8 @@ import { useApp } from "@/lib/app-context";
 async function convertToJpegBase64(uri: string): Promise<{ uri: string; base64: string }> {
   const result = await ImageManipulator.manipulateAsync(
     uri,
-    [{ resize: { width: 1200 } }],
-    { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    [{ resize: { width: 1024 } }],
+    { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
   );
   return { uri: result.uri, base64: result.base64 || "" };
 }
@@ -44,15 +44,22 @@ export default function CameraScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
+        quality: 0.5,
       });
       if (photo) {
-        const jpeg = await convertToJpegBase64(photo.uri);
-        setPendingImage(jpeg);
+        console.log("[CAMERA] Photo captured, resizing...");
+        const imageData = await convertToJpegBase64(photo.uri);
+        console.log("[CAMERA] Resized base64 length:", imageData.base64.length);
+        if (imageData.base64.length === 0) {
+          Alert.alert("Error", "Failed to process photo. Try uploading from gallery instead.");
+          return;
+        }
+        setPendingImage(imageData);
         router.replace("/receipt-review");
       }
-    } catch (e) {
-      Alert.alert("Error", "Failed to take photo");
+    } catch (e: any) {
+      console.error("[CAMERA] Capture error:", e?.message || e);
+      Alert.alert("Error", "Failed to take photo. Try uploading from gallery instead.");
     } finally {
       setIsCapturing(false);
     }

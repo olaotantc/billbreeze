@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Platform,
   Alert,
+  KeyboardAvoidingView,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -33,12 +34,15 @@ export default function SplitConfigScreen() {
   );
   const [payers, setPayers] = useState<string[]>(receipt?.payers || []);
   const [newPayer, setNewPayer] = useState("");
-  const [includeTax, setIncludeTax] = useState(true);
-  const [includeTip, setIncludeTip] = useState(true);
+  const [includeTax, setIncludeTax] = useState(receipt?.includeTax !== false);
+  const [includeTip, setIncludeTip] = useState(receipt?.includeTip !== false);
 
   if (!receipt) {
     return (
       <View style={[styles.container, { paddingTop: topInset }]}>
+        <Pressable style={styles.navButton} onPress={() => router.back()}>
+          <Feather name="arrow-left" size={22} color={Colors.text} />
+        </Pressable>
         <Text style={styles.errorText}>Receipt not found</Text>
       </View>
     );
@@ -54,7 +58,7 @@ export default function SplitConfigScreen() {
   const addPayer = () => {
     const name = newPayer.trim();
     if (!name) return;
-    if (payers.includes(name)) {
+    if (payers.some((p) => p.toLowerCase() === name.toLowerCase())) {
       Alert.alert("Duplicate", "This person is already added.");
       return;
     }
@@ -69,42 +73,55 @@ export default function SplitConfigScreen() {
     setPayers((prev) => prev.filter((p) => p !== name));
   };
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleContinue = async () => {
+    if (isSaving) return;
     if (payers.length < 2) {
       Alert.alert("Need People", "Add at least 2 people to split the bill.");
       return;
     }
 
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
+    setIsSaving(true);
+    try {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
 
-    const updated = {
-      ...receipt,
-      splitMode,
-      payers,
-      tax: includeTax ? receipt.tax : 0,
-      tip: includeTip ? receipt.tip : 0,
-      total: effectiveTotal,
-    };
+      const updated = {
+        ...receipt,
+        splitMode,
+        payers,
+        includeTax,
+        includeTip,
+        total: effectiveTotal,
+      };
 
-    await updateReceipt(updated);
+      await updateReceipt(updated);
 
-    if (splitMode === "itemized") {
-      router.push({
-        pathname: "/payer-assignment",
-        params: { receiptId: receipt.id },
-      });
-    } else {
-      router.push({
-        pathname: "/payment-summary",
-        params: { receiptId: receipt.id },
-      });
+      if (splitMode === "itemized") {
+        router.push({
+          pathname: "/payer-assignment",
+          params: { receiptId: receipt.id },
+        });
+      } else {
+        router.push({
+          pathname: "/payment-summary",
+          params: { receiptId: receipt.id },
+        });
+      }
+    } catch (e) {
+      Alert.alert("Error", "Failed to save split configuration. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
-    <View style={[styles.container, { paddingTop: topInset }]}>
+    <KeyboardAvoidingView
+      style={[styles.container, { paddingTop: topInset }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <View style={styles.header}>
         <Pressable style={styles.navButton} onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={Colors.text} />
@@ -121,12 +138,24 @@ export default function SplitConfigScreen() {
       >
         <View style={styles.totalCard}>
           <Text style={styles.totalLabel}>Total to Split</Text>
-          <Text style={styles.totalAmount}>{formatCurrency(effectiveTotal)}</Text>
+          <Text style={styles.totalAmount}>{formatCurrency(effectiveTotal, receipt.currency)}</Text>
           <Text style={styles.totalBreakdown}>
             {receipt.lineItems.length} items
-            {includeTax && receipt.tax > 0 ? ` + ${formatCurrency(receipt.tax)} tax` : ""}
-            {includeTip && receipt.tip > 0 ? ` + ${formatCurrency(receipt.tip)} tip` : ""}
+            {includeTax && receipt.tax > 0 ? ` + ${formatCurrency(receipt.tax, receipt.currency)} tax` : ""}
+            {includeTip && receipt.tip > 0 ? ` + ${formatCurrency(receipt.tip, receipt.currency)} tip` : ""}
           </Text>
+          {receipt.lineItems.length > 0 && (
+            <View style={styles.itemBreakdown}>
+              {receipt.lineItems.map((item) => (
+                <View key={item.id} style={styles.itemBreakdownRow}>
+                  <Text style={styles.itemBreakdownName} numberOfLines={1}>
+                    {(item.quantity || 1) > 1 ? `${item.quantity}x ` : ""}{item.name}
+                  </Text>
+                  <Text style={styles.itemBreakdownPrice}>{formatCurrency(item.price, receipt.currency)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -167,7 +196,7 @@ export default function SplitConfigScreen() {
           <Text style={styles.sectionTitle}>Include</Text>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleLabel}>
-              Tax ({formatCurrency(receipt.tax)})
+              Tax ({formatCurrency(receipt.tax, receipt.currency)})
             </Text>
             <Pressable
               style={[styles.toggle, includeTax && styles.toggleActive]}
@@ -183,7 +212,7 @@ export default function SplitConfigScreen() {
           </View>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleLabel}>
-              Tip ({formatCurrency(receipt.tip)})
+              Tip ({formatCurrency(receipt.tip, receipt.currency)})
             </Text>
             <Pressable
               style={[styles.toggle, includeTip && styles.toggleActive]}
@@ -230,7 +259,7 @@ export default function SplitConfigScreen() {
                 <Text style={styles.payerChipText}>{payer}</Text>
                 {splitMode === "equal" && payers.length > 0 && (
                   <Text style={styles.payerAmount}>
-                    {formatCurrency(perPerson)}
+                    {formatCurrency(perPerson, receipt.currency)}
                   </Text>
                 )}
                 <Pressable
@@ -253,7 +282,7 @@ export default function SplitConfigScreen() {
             payers.length < 2 && styles.continueDisabled,
           ]}
           onPress={handleContinue}
-          disabled={payers.length < 2}
+          disabled={payers.length < 2 || isSaving}
           testID="split-continue-btn"
         >
           <Text
@@ -262,16 +291,18 @@ export default function SplitConfigScreen() {
               payers.length < 2 && styles.continueTextDisabled,
             ]}
           >
-            {splitMode === "itemized" ? "Assign Items" : "View Summary"}
+            {isSaving ? "Saving..." : splitMode === "itemized" ? "Assign Items" : "View Summary"}
           </Text>
-          <Feather
-            name="arrow-right"
-            size={20}
-            color={payers.length < 2 ? Colors.textTertiary : Colors.white}
-          />
+          {!isSaving && (
+            <Feather
+              name="arrow-right"
+              size={20}
+              color={payers.length < 2 ? Colors.textTertiary : Colors.white}
+            />
+          )}
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -334,6 +365,31 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: "rgba(255,255,255,0.6)",
     marginTop: 4,
+  },
+  itemBreakdown: {
+    width: "100%",
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.15)",
+    gap: 6,
+  },
+  itemBreakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  itemBreakdownName: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.7)",
+    marginRight: 12,
+  },
+  itemBreakdownPrice: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: "rgba(255,255,255,0.85)",
   },
   section: {
     gap: 12,
@@ -453,8 +509,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   payerRemove: {
-    width: 28,
-    height: 28,
+    width: 44,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
   },

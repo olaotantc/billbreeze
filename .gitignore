@@ -34,6 +34,12 @@ yarn-error.*
 # local env files
 .env*.local
 
+# local-only coordination and marketing
+cowork/
+handoff.md
+marketing/
+docs/roadmap.md
+
 # typescript
 *.tsbuildinfo
 .vercel

@@ -8,6 +8,7 @@ import {
   Platform,
   Alert,
   ScrollView,
+  Linking,
 } from "react-native";
 import { router } from "expo-router";
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -64,11 +65,14 @@ export default function SettingsScreen() {
         text: "Sign Out",
         style: "destructive",
         onPress: async () => {
-          if (Platform.OS !== "web") {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          try {
+            if (Platform.OS !== "web") {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }
+            await signOut();
+          } catch (e) {
+            Alert.alert("Error", "Failed to sign out. Please try again.");
           }
-          await signOut();
-          router.replace("/");
         },
       },
     ]);
@@ -190,9 +194,29 @@ export default function SettingsScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>General</Text>
-          <SettingRow icon="info" label="About BillBreeze" />
-          <SettingRow icon="shield" label="Privacy" />
-          <SettingRow icon="help-circle" label="Help & Support" />
+          <SettingRow
+            icon="info"
+            label="About BillBreeze"
+            subtitle="v1.0.0"
+            onPress={() =>
+              Alert.alert(
+                "BillBreeze",
+                "Snap, Split & Settle Bills.\n\nScan receipts, split costs among friends, and share payment requests instantly.\n\nVersion 1.0.0"
+              )
+            }
+          />
+          <SettingRow
+            icon="shield"
+            label="Privacy Policy"
+            onPress={() => router.push("/privacy" as any)}
+          />
+          <SettingRow
+            icon="help-circle"
+            label="Help & Support"
+            onPress={() =>
+              Linking.openURL("mailto:support@billbreeze.app")
+            }
+          />
         </View>
 
         <View style={styles.section}>
@@ -215,21 +239,39 @@ export default function SettingsScreen() {
   );
 }
 
-function SettingRow({ icon, label }: { icon: string; label: string }) {
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.settingRow,
-        pressed && { opacity: 0.7 },
-      ]}
-    >
+function SettingRow({
+  icon,
+  label,
+  subtitle,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  subtitle?: string;
+  onPress?: () => void;
+}) {
+  const content = (
+    <View style={styles.settingRow}>
       <View style={styles.settingRowLeft}>
         <Feather name={icon as any} size={18} color={Colors.textSecondary} />
         <Text style={styles.settingLabel}>{label}</Text>
       </View>
-      <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
-    </Pressable>
+      {subtitle ? (
+        <Text style={styles.settingSubtitle}>{subtitle}</Text>
+      ) : (
+        <Feather name="chevron-right" size={16} color={Colors.textTertiary} />
+      )}
+    </View>
   );
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+        {content}
+      </Pressable>
+    );
+  }
+  return content;
 }
 
 const styles = StyleSheet.create({
@@ -385,6 +427,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_500Medium",
     color: Colors.text,
+  },
+  settingSubtitle: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textTertiary,
   },
   signOutButton: {
     flexDirection: "row",

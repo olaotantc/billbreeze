@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,39 +6,44 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
+  Alert,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useApp } from "@/lib/app-context";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, roundCents } from "@/lib/utils";
 import Colors from "@/constants/colors";
 import type { LineItem } from "@/shared/schema";
 
 export default function PayerAssignmentScreen() {
   const insets = useSafeAreaInsets();
   const { receiptId } = useLocalSearchParams<{ receiptId: string }>();
-  const { receipts, updateReceipt } = useApp();
+  const { receipts, updateReceipt, isLoading } = useApp();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
   const receipt = receipts.find((r) => r.id === receiptId);
-  const [assignments, setAssignments] = useState<Record<string, string[]>>(
-    () => {
-      if (!receipt) return {};
-      const map: Record<string, string[]> = {};
-      receipt.lineItems.forEach((item) => {
-        map[item.id] = item.assignedTo || [];
-      });
-      return map;
-    }
-  );
+  const [assignments, setAssignments] = useState<Record<string, string[]>>({});
+  const lineItemIds = receipt?.lineItems.map((i) => i.id).join(",") ?? "";
+
+  useEffect(() => {
+    if (!receipt) return;
+    const map: Record<string, string[]> = {};
+    receipt.lineItems.forEach((item) => {
+      map[item.id] = item.assignedTo || [];
+    });
+    setAssignments(map);
+  }, [receipt, receiptId, lineItemIds]);
 
   if (!receipt) {
     return (
       <View style={[styles.container, { paddingTop: topInset }]}>
-        <Text style={styles.errorText}>Receipt not found</Text>
+        <Pressable style={styles.navButton} onPress={() => router.back()}>
+          <Feather name="arrow-left" size={22} color={Colors.text} />
+        </Pressable>
+        {isLoading ? null : <Text style={styles.errorText}>Receipt not found</Text>}
       </View>
     );
   }
@@ -56,21 +61,49 @@ export default function PayerAssignmentScreen() {
     });
   };
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleContinue = async () => {
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isSaving) return;
+
+    const unassigned = receipt.lineItems.filter((item) => (assignments[item.id] || []).length === 0);
+    if (unassigned.length > 0) {
+      Alert.alert(
+        "Unassigned Items",
+        `${unassigned.length} item${unassigned.length > 1 ? "s" : ""} ha${unassigned.length > 1 ? "ve" : "s"} no one assigned. Their cost won't be split.`,
+        [
+          { text: "Go Back", style: "cancel" },
+          { text: "Continue Anyway", onPress: () => proceedWithSave() },
+        ]
+      );
+      return;
     }
 
-    const updatedItems = receipt.lineItems.map((item) => ({
-      ...item,
-      assignedTo: assignments[item.id] || [],
-    }));
+    proceedWithSave();
+  };
 
-    await updateReceipt({ ...receipt, lineItems: updatedItems });
-    router.push({
-      pathname: "/payment-summary",
-      params: { receiptId: receipt.id },
-    });
+  const proceedWithSave = async () => {
+    setIsSaving(true);
+    try {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+
+      const updatedItems = receipt.lineItems.map((item) => ({
+        ...item,
+        assignedTo: assignments[item.id] || [],
+      }));
+
+      await updateReceipt({ ...receipt, lineItems: updatedItems });
+      router.push({
+        pathname: "/payment-summary",
+        params: { receiptId: receipt.id },
+      });
+    } catch (e) {
+      Alert.alert("Error", "Failed to save assignments. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const getPayerTotals = () => {
@@ -80,27 +113,43 @@ export default function PayerAssignmentScreen() {
     receipt.lineItems.forEach((item) => {
       const assignedPayers = assignments[item.id] || [];
       if (assignedPayers.length > 0) {
-        const share = item.price / assignedPayers.length;
-        assignedPayers.forEach((p) => {
-          totals[p] = (totals[p] || 0) + share;
+        const baseShare = Math.floor((item.price / assignedPayers.length) * 100) / 100;
+        const remainder = roundCents(item.price - baseShare * assignedPayers.length);
+        assignedPayers.forEach((p, i) => {
+          totals[p] = (totals[p] || 0) + (i === 0 ? baseShare + remainder : baseShare);
         });
       }
     });
 
-    const taxTipTotal = receipt.tax + receipt.tip;
-    const subtotal = receipt.subtotal || receipt.lineItems.reduce((s, i) => s + i.price, 0);
+    const effectiveTax = receipt.includeTax !== false ? receipt.tax : 0;
+    const effectiveTip = receipt.includeTip !== false ? receipt.tip : 0;
+    const taxTipTotal = effectiveTax + effectiveTip;
+    const subtotal = receipt.subtotal ?? receipt.lineItems.reduce((s, i) => s + i.price, 0);
+
+    // Round subtotals before computing tax/tip proportions
+    Object.keys(totals).forEach((p) => {
+      totals[p] = roundCents(totals[p]);
+    });
 
     if (subtotal > 0 && taxTipTotal > 0) {
-      Object.keys(totals).forEach((p) => {
+      const payers = Object.keys(totals);
+      let taxTipDistributed = 0;
+      payers.forEach((p, i) => {
         const proportion = totals[p] / subtotal;
-        totals[p] += proportion * taxTipTotal;
+        if (i < payers.length - 1) {
+          const share = roundCents(proportion * taxTipTotal);
+          totals[p] = roundCents(totals[p] + share);
+          taxTipDistributed += share;
+        } else {
+          totals[p] = roundCents(totals[p] + (taxTipTotal - taxTipDistributed));
+        }
       });
     }
 
     return totals;
   };
 
-  const payerTotals = getPayerTotals();
+  const payerTotals = useMemo(() => getPayerTotals(), [assignments, receipt]);
 
   return (
     <View style={[styles.container, { paddingTop: topInset }]}>
@@ -119,7 +168,7 @@ export default function PayerAssignmentScreen() {
               {payer}
             </Text>
             <Text style={styles.payerSummaryAmount}>
-              {formatCurrency(payerTotals[payer] || 0)}
+              {formatCurrency(payerTotals[payer] || 0, receipt.currency)}
             </Text>
           </View>
         ))}
@@ -136,7 +185,7 @@ export default function PayerAssignmentScreen() {
               <Text style={styles.itemName} numberOfLines={1}>
                 {item.name || "Unnamed Item"}
               </Text>
-              <Text style={styles.itemPrice}>{formatCurrency(item.price)}</Text>
+              <Text style={styles.itemPrice}>{formatCurrency(item.price, receipt.currency)}</Text>
             </View>
             <View style={styles.payerButtons}>
               {receipt.payers.map((payer) => {
@@ -177,10 +226,11 @@ export default function PayerAssignmentScreen() {
             pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
           ]}
           onPress={handleContinue}
+          disabled={isSaving}
           testID="assignment-continue-btn"
         >
-          <Text style={styles.continueText}>View Summary</Text>
-          <Feather name="arrow-right" size={20} color={Colors.white} />
+          <Text style={styles.continueText}>{isSaving ? "Saving..." : "View Summary"}</Text>
+          {!isSaving && <Feather name="arrow-right" size={20} color={Colors.white} />}
         </Pressable>
       </View>
     </View>

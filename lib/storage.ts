@@ -12,9 +12,19 @@ export interface PaymentHandles {
   cashapp?: string;
 }
 
+function safeParse<T>(data: string | null, fallback: T): T {
+  if (!data) return fallback;
+  try {
+    return JSON.parse(data);
+  } catch {
+    console.warn("[BillBreeze] Corrupted storage data, returning default");
+    return fallback;
+  }
+}
+
 export async function getPaymentHandles(): Promise<PaymentHandles> {
   const data = await AsyncStorage.getItem(PAYMENT_HANDLES_KEY);
-  return data ? JSON.parse(data) : {};
+  return safeParse(data, {});
 }
 
 export async function setPaymentHandles(handles: PaymentHandles): Promise<void> {
@@ -23,7 +33,7 @@ export async function setPaymentHandles(handles: PaymentHandles): Promise<void> 
 
 export async function getUser(): Promise<{ email: string; name: string } | null> {
   const data = await AsyncStorage.getItem(USER_KEY);
-  return data ? JSON.parse(data) : null;
+  return safeParse(data, null);
 }
 
 export async function setUser(user: { email: string; name: string }): Promise<void> {
@@ -36,7 +46,22 @@ export async function clearUser(): Promise<void> {
 
 export async function getReceipts(): Promise<Receipt[]> {
   const data = await AsyncStorage.getItem(RECEIPTS_KEY);
-  return data ? JSON.parse(data) : [];
+  const receipts = safeParse<Receipt[]>(data, []);
+  return receipts.map((r) => ({
+    ...r,
+    currency: r.currency || "$",
+    subtotal: r.subtotal ?? 0,
+    tax: r.tax ?? 0,
+    tip: r.tip ?? 0,
+    total: r.total ?? 0,
+    includeTax: r.includeTax !== false,
+    includeTip: r.includeTip !== false,
+    lineItems: (r.lineItems || []).map((item) => ({
+      ...item,
+      quantity: item.quantity || 1,
+      assignedTo: item.assignedTo || [],
+    })),
+  }));
 }
 
 export async function saveReceipt(receipt: Receipt): Promise<void> {
@@ -58,7 +83,11 @@ export async function deleteReceipt(id: string): Promise<void> {
 
 export async function getPaymentRequests(): Promise<PaymentRequest[]> {
   const data = await AsyncStorage.getItem(REQUESTS_KEY);
-  return data ? JSON.parse(data) : [];
+  const requests = safeParse<PaymentRequest[]>(data, []);
+  return requests.map((r) => ({
+    ...r,
+    currency: r.currency || "$",
+  }));
 }
 
 export async function savePaymentRequest(request: PaymentRequest): Promise<void> {
