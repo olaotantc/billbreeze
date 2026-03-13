@@ -1,11 +1,12 @@
 import { isLiquidGlassAvailable } from "expo-glass-effect";
-import { Tabs } from "expo-router";
+import { Tabs, Redirect } from "expo-router";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
 import { BlurView } from "expo-blur";
 import { Platform, StyleSheet, useColorScheme, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import Colors from "@/constants/colors";
+import { useApp } from "@/lib/app-context";
 
 function NativeTabLayout() {
   return (
@@ -99,6 +100,16 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
+  const { user, isLoading } = useApp();
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (!user) {
+    return <Redirect href="/sign-in" />;
+  }
+
   if (isLiquidGlassAvailable()) {
     return <NativeTabLayout />;
   }

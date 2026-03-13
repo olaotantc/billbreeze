@@ -70,7 +70,6 @@ export default function SettingsScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             }
             await signOut();
-            router.replace("/");
           } catch (e) {
             Alert.alert("Error", "Failed to sign out. Please try again.");
           }
