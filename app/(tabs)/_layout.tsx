@@ -102,7 +102,11 @@ function ClassicTabLayout() {
 export default function TabLayout() {
   const { user, isLoading } = useApp();
 
-  if (!isLoading && !user) {
+  if (isLoading) {
+    return null;
+  }
+
+  if (!user) {
     return <Redirect href="/sign-in" />;
   }
 
