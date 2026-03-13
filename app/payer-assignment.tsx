@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -20,21 +20,22 @@ import type { LineItem } from "@/shared/schema";
 export default function PayerAssignmentScreen() {
   const insets = useSafeAreaInsets();
   const { receiptId } = useLocalSearchParams<{ receiptId: string }>();
-  const { receipts, updateReceipt } = useApp();
+  const { receipts, updateReceipt, isLoading } = useApp();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
   const receipt = receipts.find((r) => r.id === receiptId);
-  const [assignments, setAssignments] = useState<Record<string, string[]>>(
-    () => {
-      if (!receipt) return {};
-      const map: Record<string, string[]> = {};
-      receipt.lineItems.forEach((item) => {
-        map[item.id] = item.assignedTo || [];
-      });
-      return map;
-    }
-  );
+  const [assignments, setAssignments] = useState<Record<string, string[]>>({});
+  const lineItemIds = receipt?.lineItems.map((i) => i.id).join(",") ?? "";
+
+  useEffect(() => {
+    if (!receipt) return;
+    const map: Record<string, string[]> = {};
+    receipt.lineItems.forEach((item) => {
+      map[item.id] = item.assignedTo || [];
+    });
+    setAssignments(map);
+  }, [receipt, receiptId, lineItemIds]);
 
   if (!receipt) {
     return (
@@ -42,7 +43,7 @@ export default function PayerAssignmentScreen() {
         <Pressable style={styles.navButton} onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={Colors.text} />
         </Pressable>
-        <Text style={styles.errorText}>Receipt not found</Text>
+        {isLoading ? null : <Text style={styles.errorText}>Receipt not found</Text>}
       </View>
     );
   }

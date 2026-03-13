@@ -38,6 +38,7 @@ yarn-error.*
 cowork/
 handoff.md
 marketing/
+docs/roadmap.md
 
 # typescript
 *.tsbuildinfo
