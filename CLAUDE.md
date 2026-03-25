@@ -67,7 +67,13 @@ tests/
 ## EAS Build & Submit
 - `eas.json` configured with development, preview, and production profiles
 - `.easignore` configured to exclude non-essential files from builds
-- Submit credentials (appleId, ascAppId, appleTeamId) still need to be filled in `eas.json`
+- Submit credentials (appleId, ascAppId, appleTeamId) need to be added to `eas.json` before App Store submission
+
+## Marketing Assets
+- App Store screenshots: `marketing/appstore-6.7/` (1290x2796) and `marketing/appstore-6.1/` (1179x2556)
+- Framed screenshots for social/landing: `marketing/framed-*.png`
+- App Store copy: `cowork/deliverables/app-store-copy.md`
+- X launch posts: `cowork/deliverables/x-launch-posts.md` + `marketing/x-post-*.md`
 
 ## Conventions
 - TypeScript strict mode throughout
