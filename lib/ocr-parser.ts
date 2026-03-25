@@ -51,6 +51,23 @@ export function parseReceiptText(text: string): {
     return noisePatterns.some((p) => p.test(line));
   };
 
+  // Currency-aware price pattern: handles "1,500.00", "250.00", "250", with optional currency before/after
+  const currSym = `(?:[$€£¥₦₹₩₵]|R\\$|C\\$|A\\$|KSh|KES|NGN)?`;
+  // Price: "1,500.00" or "500.00" or "3,50" (comma-decimal) or "250"
+  const priceNum = `(\\d{1,3}(?:,\\d{3})*(?:\\.\\d{1,2})?|\\d+\\.\\d{1,2}|\\d+,\\d{1,2}|\\d+)`;
+  const priceOnlyPattern = new RegExp(`^${currSym}\\s*${priceNum}\\s*${currSym}\\s*$`);
+  const priceAtEndPattern = new RegExp(`^(.+?)\\s+${currSym}\\s*${priceNum}\\s*${currSym}\\s*$`);
+  // Quantity line: "2 x 380.00", "3 @ 12.50", or "2 x 3,50" (comma-decimal)
+  const qtyPricePattern = new RegExp(`^(\\d+)\\s*[xX@]\\s*${priceNum}$`);
+  const parsePrice = (s: string): number => {
+    // Comma as decimal separator: "3,50" (not thousands like "1,000")
+    if (/^\d+,\d{1,2}$/.test(s)) {
+      return parseFloat(s.replace(",", "."));
+    }
+    // Remove thousands commas, then parse
+    return parseFloat(s.replace(/,/g, ""));
+  };
+
   // Pre-process: merge orphan text lines that OCR split from the previous line
   // e.g., "Chocolate" + "Cake" + "$8.00" → "Chocolate Cake" + "$8.00"
   const lines: string[] = [];
@@ -63,10 +80,9 @@ export function parseReceiptText(text: string): {
     // (no prices/numbers), and the line after that is a price — merge current + next
     const hasText = /[a-zA-Z]{2,}/.test(line);
     const nextIsTextOnly = nextLine && /^[a-zA-Z][a-zA-Z\s]*$/.test(nextLine) && nextLine.length >= 2;
-    const pricePattern = /^[$€£¥₦₹₩₵]?\s*\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?\s*$/;
-    const afterNextIsPrice = lineAfterNext && pricePattern.test(lineAfterNext);
+    const afterNextIsPrice = lineAfterNext && priceOnlyPattern.test(lineAfterNext);
     // Also check: next line is text-only and current line does NOT already end with a price
-    const currentHasPrice = /\d+\.\d{2}\s*$/.test(line);
+    const currentHasPrice = /\d+[\.,]\d{1,2}\s*$/.test(line);
 
     // Don't merge if current line is noise or next line is a summary label
     const nextIsSummary = nextLine && (subtotalPattern.test(nextLine) || taxPattern.test(nextLine) || totalPattern.test(nextLine) || tipPattern.test(nextLine));
@@ -112,23 +128,6 @@ export function parseReceiptText(text: string): {
       }
     }
   }
-
-  // Currency-aware price pattern: handles "1,500.00", "250.00", "250", with optional currency before/after
-  const currSym = `(?:[$€£¥₦₹₩₵]|R\\$|C\\$|A\\$|KSh|KES|NGN)?`;
-  // Price: "1,500.00" or "500.00" or "3,50" (comma-decimal) or "250"
-  const priceNum = `(\\d{1,3}(?:,\\d{3})*(?:\\.\\d{1,2})?|\\d+\\.\\d{1,2}|\\d+,\\d{1,2}|\\d+)`;
-  const priceOnlyPattern = new RegExp(`^${currSym}\\s*${priceNum}\\s*${currSym}\\s*$`);
-  const priceAtEndPattern = new RegExp(`^(.+?)\\s+${currSym}\\s*${priceNum}\\s*${currSym}\\s*$`);
-  // Quantity line: "2 x 380.00" or "3 @ 12.50"
-  const qtyPricePattern = /^(\d+)\s*[xX@]\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+\.\d{1,2}|\d+)$/;
-  const parsePrice = (s: string): number => {
-    // Comma as decimal separator: "3,50" (not thousands like "1,000")
-    if (/^\d+,\d{1,2}$/.test(s)) {
-      return parseFloat(s.replace(",", "."));
-    }
-    // Remove thousands commas, then parse
-    return parseFloat(s.replace(/,/g, ""));
-  };
 
   const isItemNameLine = (line: string): boolean => {
     if (isNoiseLine(line)) return false;
