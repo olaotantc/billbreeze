@@ -23,8 +23,6 @@ app/                  # Expo Router screens
   payment-summary.tsx # Final breakdown + share/save
   sign-in.tsx         # Local auth (email + name)
   privacy.tsx         # In-app privacy policy
-server/
-  index.ts            # Legacy Express server (app no longer depends on this)
 lib/
   app-context.tsx     # Global state provider (user, receipts, requests, handles)
   ocr-parser.ts       # Receipt text parser (extracted from old server/routes.ts)
@@ -40,7 +38,7 @@ components/
 constants/
   colors.ts           # Design tokens (teal #004E45, gold #F0B429)
 tests/
-  parser.test.ts      # OCR parser test suite (53 cases, 48 pass, 5 known edge-case failures)
+  parser.test.ts      # OCR parser test suite (54 cases, all passing)
 ```
 
 ## Key Data Models (shared/schema.ts)
@@ -77,7 +75,7 @@ tests/
 - Color tokens in `constants/colors.ts` - never use raw hex in screens
 - Inter font family loaded via `@expo-google-fonts/inter`
 - Error boundaries at app root; use `Alert.alert()` for user-facing errors
-- OCR parser has a 53-case test suite; other areas lack tests, so be cautious with refactors
+- OCR parser has a 54-case test suite (all passing); other areas lack tests, so be cautious with refactors
 
 ## Cowork Coordination
 This project uses a shared workflow between Claude Code (CLI) and Claude Cowork (web).
@@ -94,4 +92,3 @@ This project uses a shared workflow between Claude Code (CLI) and Claude Cowork 
 - OCR parser is regex-based and may miss unusual receipt formats
 - No image saved with receipts (imageUri field unused)
 - React Query retry is disabled
-- `server/` directory still in repo but app doesn't depend on it; Express dep still in package.json (cleanup candidate)

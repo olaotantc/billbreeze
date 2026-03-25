@@ -39,6 +39,7 @@ cowork/
 handoff.md
 marketing/
 docs/roadmap.md
+project_status.md
 
 # typescript
 *.tsbuildinfo

@@ -94,37 +94,6 @@ export default function ReceiptReviewScreen() {
     setScanComplete(true);
   };
 
-  const scanViaServer = async (base64: string): Promise<boolean> => {
-    // Dev fallback: POST to Express server running on local machine
-    const Constants = require("expo-constants").default;
-    const debuggerHost =
-      Constants.expoConfig?.hostUri ??
-      (Constants as any).manifest?.debuggerHost;
-    const ip = debuggerHost?.split(":")[0];
-    const baseUrl = ip ? `http://${ip}:8080` : "http://localhost:8080";
-
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      const response = await fetch(`${baseUrl}/api/ocr/parse`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: base64 }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-
-      if (response.ok) {
-        const data = await response.json();
-        applyOcrResult(data);
-        return true;
-      }
-    } catch (e: any) {
-      console.log("[OCR] Server fallback failed:", e?.message);
-    }
-    return false;
-  };
-
   const scanReceiptOnDevice = async (imageUri: string) => {
     setIsScanning(true);
     try {
@@ -151,22 +120,12 @@ export default function ReceiptReviewScreen() {
 
       applyOcrResult(parseReceiptText(fullText));
     } catch (e: any) {
-      // ML Kit not available (Expo Go) — fall back to server if running
-      console.log("[OCR] ML Kit unavailable, trying server fallback...");
-
-      const base64 = pendingImage?.base64;
-      if (base64) {
-        const serverWorked = await scanViaServer(base64);
-        if (serverWorked) return;
-      }
-
+      console.log("[OCR] ML Kit unavailable:", e?.message);
       setPendingImage(null);
       setScanComplete(true);
       Alert.alert(
         "Scan Issue",
-        __DEV__
-          ? "ML Kit requires a dev build. Run 'npm run server:dev' for Expo Go testing, or use 'eas build --profile development' for native OCR."
-          : "Could not read the receipt. You can add items manually."
+        "Could not read the receipt. You can add items manually."
       );
     } finally {
       setIsScanning(false);
