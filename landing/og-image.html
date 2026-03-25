@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700&family=Instrument+Serif&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1200px;
+    height: 630px;
+    overflow: hidden;
+  }
+
+  .og {
+    width: 1200px;
+    height: 630px;
+    background: linear-gradient(135deg, #003830 0%, #004E45 40%, #006B5E 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Subtle pattern */
+  .og::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 700px;
+    height: 700px;
+    border-radius: 50%;
+    background: rgba(240, 180, 41, 0.06);
+  }
+
+  .og::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -10%;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .content {
+    text-align: center;
+    z-index: 1;
+    padding: 0 80px;
+  }
+
+  .logo-mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .logo-icon {
+    width: 52px;
+    height: 52px;
+    background: #F0B429;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+  }
+
+  .logo-text {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: 44px;
+    color: #FFFFFF;
+    letter-spacing: -0.5px;
+  }
+
+  h1 {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 700;
+    font-size: 56px;
+    color: #FFFFFF;
+    line-height: 1.15;
+    margin-bottom: 20px;
+    letter-spacing: -1px;
+  }
+
+  h1 span {
+    color: #F0B429;
+  }
+
+  p {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.5;
+  }
+
+  .pill {
+    display: inline-block;
+    margin-top: 28px;
+    padding: 10px 28px;
+    background: rgba(240, 180, 41, 0.15);
+    border: 1px solid rgba(240, 180, 41, 0.3);
+    border-radius: 100px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    color: #F5CC66;
+  }
+</style>
+</head>
+<body>
+  <div class="og">
+    <div class="content">
+      <div class="logo-mark">
+        <div class="logo-icon">$</div>
+        <span class="logo-text">BillBreeze</span>
+      </div>
+      <h1>Stop Losing Money<br>on <span>Group Dinners</span></h1>
+      <p>Scan any receipt. Split by item or equally.<br>Send Venmo, PayPal & Cash App requests instantly.</p>
+      <div class="pill">iOS app coming soon</div>
+    </div>
+  </div>
+</body>
+</html>

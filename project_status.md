@@ -1,9 +1,10 @@
 # BillBreeze - Project Status
 
-**Last Updated**: 2026-03-11
+**Last Updated**: 2026-03-25
 **Platform**: Expo 54 / React Native 0.81 (serverless)
 **Stage**: App Store Ready (pending Apple Developer enrollment)
 **Repo**: https://github.com/olaotantc/billbreeze
+**Landing Page**: https://billbreeze.co (Vercel, auto-deploys from main)
 
 ---
 
@@ -23,14 +24,17 @@
 | Proportional tax/tip distribution | Done | `app/payment-summary.tsx`, `app/payer-assignment.tsx` |
 | Payment link generation (Venmo, PayPal, Cash App) | Done | `app/payment-summary.tsx` |
 | Share breakdown via messaging | Done | `app/payment-summary.tsx` |
+| BillBreeze branding in share text | Done | `constants/app.ts` (SHARE_FOOTER) |
 | Payment request tracking (inbox) | Done | `app/(tabs)/inbox.tsx` |
 | Pending/paid status toggle | Done | `app/(tabs)/inbox.tsx` |
 | Settings (payment handles) | Done | `app/(tabs)/settings.tsx` |
+| Sign-out with auth guard redirect | Done | `app/(tabs)/_layout.tsx`, `app/(tabs)/settings.tsx` |
 | Local data persistence | Done | `lib/storage.ts`, `lib/app-context.tsx` |
 | Error boundaries | Done | `components/ErrorBoundary.tsx` |
 | Currency detection (OCR) | Done | `lib/ocr-parser.ts` |
 | Quantity parsing (OCR) | Done | `lib/ocr-parser.ts` |
 | Privacy policy (in-app) | Done | `app/privacy.tsx` |
+| Local analytics counters | Done | `lib/analytics.ts` (4 events) |
 | EAS Build configuration | Done | `eas.json`, `.easignore` |
 | iOS permissions & metadata | Done | `app.json` |
 
@@ -45,6 +49,7 @@
 | EAS build profiles | Done | `eas.json` (dev/preview/production) |
 | Privacy policy | Done | In-app at `app/privacy.tsx` |
 | Settings links wired | Done | About, Privacy, Help & Support |
+| Landing page | Done | billbreeze.co (Vercel) |
 | Apple Developer Account | **BLOCKED** | Needs re-enrollment ($99/year) |
 | App Store screenshots | Not done | Need 6.7" + 6.1" captures |
 | TestFlight testing | Not done | Requires Apple Developer |
@@ -57,18 +62,19 @@
 | Receipt image storage | Schema only | `imageUri` field exists but never populated |
 | Receipt date tracking | Schema only | `date` field exists but never set from OCR |
 
-### Not Started (Phase 3 — PRD Parity, if needed)
-| Feature | Priority | Description |
-|---------|----------|-------------|
-| Stripe Payment Links | Medium | Per-person Stripe links (requires backend) |
-| Firebase Auth + Firestore | Medium | Cross-device sync, real auth |
-| Camera edge detection | Medium | Auto-capture with document detection |
-| Push notifications | Medium | Payment status reminders |
-| QR code generation | Low | Alternative to text sharing |
-| Custom percentage split | Low | PRD spec, not user-requested |
-| CSV/PDF export | Low | Business expense reporting |
-| Analytics/telemetry | Done (local) | On-device counters in `lib/analytics.ts` |
-| Contacts integration | Low | Prefill payers from device contacts |
+### Not Started (Future Phases)
+| Feature | Phase | Description |
+|---------|-------|-------------|
+| Firebase Auth + Firestore | A | Cloud persistence, real auth, Apple Sign-In |
+| Stripe Payment Links | D | Per-person Stripe links (requires Cloud Functions) |
+| Camera edge detection | D | Auto-capture with document detection |
+| Push notifications | D | Payment status reminders |
+| QR code generation | D | Alternative to text sharing |
+| Pro unlock ($2.99 one-time) | C | Gate receipt history beyond 10 items |
+| Group presets | C | Save recurring payer groups |
+| CSV export | C | Payment request history export |
+| Custom split ratios | C | Percentage-based splits |
+| Contacts integration | D | Prefill payers from device contacts |
 
 ---
 
@@ -85,9 +91,10 @@ Camera/Gallery -> JPEG -> On-device ML Kit OCR -> parseReceiptText()
 - **AppProvider** (`lib/app-context.tsx`): Single context holding user, receipts, paymentRequests, paymentHandles, pendingImage
 - **AsyncStorage**: 4 keys for persistent data (`@billbreeze_receipts`, `@billbreeze_requests`, `@billbreeze_user`, `@billbreeze_payment_handles`)
 - **React Query**: Client configured, retry disabled
+- **Auth guard**: Tabs layout redirects to sign-in when user is null, returns null during loading
 
 ### Split Calculation Logic
-- **Equal**: `(subtotal + tax? + tip?) / num_payers`, remainder cents go to first payer
+- **Equal**: `(subtotal + tax? + tip?) / num_payers`, Math.floor for base share, remainder cents go to first payer
 - **Itemized**: Per-item share = `item.price / num_assigned`, then tax/tip distributed proportionally by each payer's subtotal share, remainder cents go to last payer
 - **Tax/Tip toggles**: `includeTax`/`includeTip` booleans on Receipt preserve original values when toggled off
 
@@ -95,15 +102,12 @@ Camera/Gallery -> JPEG -> On-device ML Kit OCR -> parseReceiptText()
 
 ## Infrastructure
 
-### What Was Removed (March 11, 2026)
-| Component | Reason |
-|-----------|--------|
-| Express.js server (`server/`) | Replaced by on-device OCR |
-| Google Cloud Vision API | Replaced by ML Kit (free, on-device) |
-| Drizzle ORM + PostgreSQL | Never used, dead weight |
-| `express`, `helmet`, `express-rate-limit`, `http-proxy-middleware`, `ws`, `pg` | Server deps |
-| `@expo/ngrok` | Replit tunneling, not needed |
-| `drizzle-orm`, `drizzle-zod`, `drizzle-kit` | Unused DB deps |
+### Hosting & Deployment
+| Component | Platform | Branch |
+|-----------|----------|--------|
+| Landing page | Vercel (billbreeze.co) | `main` (auto-deploy, root: `landing/`) |
+| iOS app | EAS Build → App Store | `main` via `eas build` |
+| Domain | GoDaddy | DNS → Vercel (A + CNAME) |
 
 ### Current Cost
 | Component | Cost |
@@ -111,17 +115,19 @@ Camera/Gallery -> JPEG -> On-device ML Kit OCR -> parseReceiptText()
 | OCR (ML Kit on-device) | $0 |
 | Data storage (AsyncStorage) | $0 |
 | Server hosting | $0 (none) |
+| Landing page (Vercel hobby) | $0 |
+| Domain (billbreeze.co) | ~$12/year |
 | EAS Build (free tier) | $0 |
 | Apple Developer | $99/year (pending) |
-| **Total** | **$99/year** |
+| **Total** | **~$111/year** |
 
 ---
 
 ## Known Issues
 
 ### Critical
-1. **Data loss on uninstall** - All data stored in AsyncStorage only
-2. **No real authentication** - Local email/name only
+1. **Data loss on uninstall** - All data stored in AsyncStorage only (Firebase planned for Phase A)
+2. **No real authentication** - Local email/name only (Firebase Auth planned)
 3. **No data encryption** - Plaintext JSON in AsyncStorage
 
 ### Moderate
@@ -130,51 +136,95 @@ Camera/Gallery -> JPEG -> On-device ML Kit OCR -> parseReceiptText()
 
 ### Minor
 6. **Unused schema fields** - `imageUri`, `date`, `fixed` split mode
-7. **Typed routes stale** - New `privacy.tsx` route needs Expo type generation
-
-### Resolved (March 11, 2026)
-- ~~Server dependency~~ - Replaced with on-device OCR
-- ~~Vision API cost~~ - Eliminated
-- ~~Dead Drizzle/PostgreSQL deps~~ - Removed
-- ~~Settings "Coming soon" placeholders~~ - Wired to About, Privacy, Help
-- ~~Missing privacy policy~~ - In-app screen created
-- ~~Missing EAS config~~ - eas.json + .easignore created
-- ~~Missing iOS permissions~~ - Camera + photo library strings added
-- ~~Replit origin in app.json~~ - Removed
-
-### Resolved (March 10, 2026)
-- ~~No input sanitization~~ - Negative prices prevented, float artifacts fixed
-- ~~Split rounding errors~~ - Remainder distribution ensures shares sum exactly to total
-- ~~Stale closures in useEffect~~ - Fixed dependency arrays with hasInitialized ref
-- ~~OCR errors leaked to client~~ - Sanitized error responses
-- ~~Small touch targets~~ - All interactive elements now 44px minimum
-- ~~Missing error handling~~ - try-catch on all save/sign-out flows with loading states
+7. **Legacy server dir** - `server/` still in repo, Express dep in package.json (cleanup candidate)
 
 ---
 
-## Codebase Metrics
-- **Source files**: ~18 TypeScript files
-- **Screens**: 11 (welcome, sign-in, home, camera, receipt-review, split-config, payer-assignment, payment-summary, inbox, settings, privacy)
-- **API endpoints**: 0 (fully on-device)
-- **Components**: 3 reusable (ErrorBoundary, ErrorFallback, KeyboardAwareScrollViewCompat)
-- **Dependencies**: 33 production, 6 dev
-- **Test coverage**: 53-case OCR parser test suite (`tests/parser.test.ts`), 48 passing
+## Resolved Issues
+
+### March 13, 2026
+- ~~Sign-out not redirecting~~ - Auth guard via `<Redirect>` in tabs layout
+- ~~Tabs flash on cold start~~ - Return null while isLoading
+- ~~Stale payer assignments~~ - useEffect with receiptId + lineItemIds deps
+- ~~"Free forever" claims on landing page~~ - Removed (Pro $2.99 planned)
+- ~~Landing page not deployed~~ - Live at billbreeze.co via Vercel
+- ~~Roadmap in git~~ - Gitignored (internal planning doc)
+
+### March 12, 2026
+- ~~Fake social proof on landing page~~ - Replaced with real claims
+- ~~Privacy claims too absolute~~ - Softened per PR review
+- ~~APP_STORE_URL broken placeholder~~ - Conditional on APP_STORE_ID
+- ~~Analytics overcounting~~ - trackEvent only fires when share occurs
+- ~~Meta description too long~~ - Trimmed to ~155 chars
+
+### March 11, 2026
+- ~~Negative split remainders~~ - Math.floor for base share
+- ~~Zero values treated as missing~~ - Nullish coalescing (?? 0)
+- ~~Tax/tip rounding drift~~ - roundCents before proportion calc
+- ~~Analytics race condition~~ - Promise queue serialization
+- ~~Server dependency~~ - Replaced with on-device OCR
+
+### March 9-10, 2026
+- ~~Split rounding errors~~ - Remainder distribution
+- ~~Stale closures in useEffect~~ - Fixed dependency arrays
+- ~~Small touch targets~~ - All interactive elements 44px minimum
+- ~~Missing error handling~~ - try-catch on all save/sign-out flows
+
+---
+
+## To Do List
+
+### Immediate (Blocked on Apple Developer)
+- [ ] Re-enroll Apple Developer Program ($99/year)
+- [ ] Fill `eas.json` submit credentials (appleId, ascAppId, appleTeamId)
+- [ ] Enable "Sign in with Apple" capability in Developer portal
+- [ ] `eas build --platform ios --profile preview` → install via TestFlight
+- [ ] Test core flow on device: scan → split → share
+- [ ] Capture App Store screenshots (6.7" + 6.1") using seed data in app-context.tsx
+- [ ] Remove seed data block after capturing
+- [ ] Set `APP_STORE_ID` in `constants/app.ts`
+- [ ] App Store copy from `cowork/deliverables/app-store-copy.md`
+- [ ] `eas submit --platform ios` → App Store review
+
+### Phase A: Firebase Integration (Before Marketing)
+- [ ] Create Firebase project ("BillBreeze") in Firebase Console
+- [ ] Enable Auth providers: Apple Sign-In + Email/Password
+- [ ] Create Firestore database (production mode)
+- [ ] Download `GoogleService-Info.plist` + `google-services.json`
+- [ ] Install `@react-native-firebase/app`, `auth`, `firestore`, `expo-apple-authentication`
+- [ ] Create `lib/firebase/` module (config, auth, firestore, migration)
+- [ ] Update `lib/app-context.tsx` (Firebase Auth + Firestore)
+- [ ] Create `app/sign-in.tsx` (Apple Sign-In + email/password)
+- [ ] Deploy Firestore security rules
+- [ ] Test migration: AsyncStorage → Firestore
+- [ ] Test with dev build (`npx expo run:ios` — Expo Go won't work with native Firebase)
+
+### Phase B: Launch & Early Traction (First 30 Days)
+- [ ] Post in r/splitwise, r/personalfinance when Splitwise complaint threads appear
+- [ ] Cross-post to Build in Public, Vibe Coding communities on X
+- [ ] Add App Store download badge to billbreeze.co
+- [ ] Monitor analytics counters
+- [ ] "BillBreeze vs Splitwise" comparison blog post
+
+### Phase C: Monetization (60-90 Days)
+- [ ] Pro unlock ($2.99 one-time) via StoreKit 2
+- [ ] Gate receipt history beyond 10 items
+- [ ] Group presets, CSV export, custom split ratios
+
+---
+
+## Git Workflow
+- Feature branches → PRs to `dev` → merge `dev` into `main`
+- All PRs #1-#9 merged
+- `main` is production-ready, `dev` is staging
 
 ---
 
 ## History
+- **March 25, 2026**: Drafted X launch posts (4 variants: zero-infra dev angle + relatable broader angle). Saved to `cowork/deliverables/x-launch-posts.md`. Posting strategy: stagger dev + broad posts same day.
+- **March 13, 2026**: Fixed sign-out redirect (auth guard in tabs layout). Removed "free forever" claims from landing page. Fixed stale payer assignments (lineItemIds dep). Deployed landing page to billbreeze.co via Vercel. Connected custom domain. Merged dev into main (PR #9). Created comprehensive to-do list.
+- **March 12, 2026**: Landing page updates (remove fake stats, add Splitwise SEO section). Added BillBreeze branding to share text. Local analytics counters. Fixed split rounding, falsy zero checks, tax/tip proportional distribution. Vercel config. Created roadmap at docs/roadmap.md. Planned Firebase integration for Phase A.
 - **March 11, 2026**: App Store preparation. Replaced server-side Vision API with on-device ML Kit OCR. Deleted Express server, Drizzle, and all server deps. Created EAS build config, privacy policy screen, wired settings. App is now fully serverless ($0/mo infrastructure). Blocked only on Apple Developer re-enrollment.
 - **March 9-10, 2026**: Physical device testing on iPhone via Expo Go. Fixed sign-in keyboard, camera scanning, OCR parser improvements (currency detection, quantity parsing, expanded formats). Added landing page. Ran comprehensive QA audit. Implemented all 13 QA fixes: split rounding, security hardening, accessibility, error handling, storage defaults.
 - **March 7-8, 2026**: GitHub export from Replit. README added. CLAUDE.md created. Full codebase review.
 - **Prior**: Core MVP built on Replit with full scan-to-split flow.
-
----
-
-## Next Steps
-1. **Re-enroll Apple Developer Program** ($99/year) — hard blocker
-2. Fill `eas.json` submit credentials (appleId, ascAppId, appleTeamId)
-3. Generate App Store screenshots (6.7" + 6.1")
-4. `eas build --platform ios --profile preview` → TestFlight test
-5. `eas submit --platform ios` → App Store review
-6. Post-launch: monitor OCR accuracy, fix 5 failing parser edge cases
-7. Phase 3 (if user feedback demands): Stripe, Firebase, edge detection, push notifications
