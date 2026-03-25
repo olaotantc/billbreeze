@@ -1,7 +1,7 @@
 /**
  * Receipt text parser — extracted from server/routes.ts for on-device use.
  * Pure function: takes raw OCR text, returns structured receipt data.
- * Tested by tests/parser.test.ts (52 cases).
+ * Tested by tests/parser.test.ts (54 cases, all passing).
  */
 
 export function parseReceiptText(text: string): {
@@ -13,6 +13,43 @@ export function parseReceiptText(text: string): {
   total: number | null;
 } {
   const rawLines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+
+  // Summary/noise patterns needed early for merge guard
+  const subtotalPattern = /sub\s*-?\s*total/i;
+  const taxPattern = /\btax(?:es)?\b|\bhst\b|\bgst\b|\bpst\b|\bvat\b|\bctl\b|\bconsumption\s*tax\b/i;
+  const totalPattern = /\btotal\b|\bamount\s*due\b|\bbalance\s*due\b|\bbill\s*amount\b/i;
+  const tipPattern = /\btip\b|\bgratuity\b/i;
+
+  const isNoiseLine = (line: string): boolean => {
+    const noisePatterns = [
+      /^(tel|phone|fax|address|www|http|date|time|order|check|table|server|cashier|card|visa|master|amex|debit|credit|change|balance\b(?!\s*due)|thank|receipt|welcome|store|guest|transaction|ref|auth|approved|member|loyalty|reward|points|earn|share|ask anything|thinking|chat|served\s+by|guests?:|buy\s+goods|till\s+number)/i,
+      /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/,
+      /^\d{1,2}:\d{2}/,
+      /^#\d+/,
+      /^\*{2,}/,
+      /^-{3,}/,
+      /^={3,}/,
+      /^\d{4,}$/,
+      /^x{4,}/i,
+      /\bdiscount\b|\bsavings\b|\bcoupon\b|\bpromo\b/i,
+      /can make mistakes/i,
+      /please come again/i,
+      /bloomberg|forex|home \|/i,
+      /(?=[a-f0-9]*[0-9])(?=[a-f0-9]*[a-f])[a-f0-9]{20,}/i,
+      /^at\s+table\b/i,
+      // Address lines: "City, ST 12345" or "123 Street Name"
+      /^[A-Z][a-zA-Z\s]+,\s*[A-Z]{2}\s+\d{5}/,
+      /^\d{1,5}\s+[A-Z][a-zA-Z\s]+(lane|st|street|ave|avenue|rd|road|blvd|dr|drive|way|ct|court|pl|place|circle|cir)\b/i,
+      // "Test Receipt", "OCR App", etc.
+      /\btest\s+receipt\b/i,
+      /\bdining\s+with\b/i,
+      // City/location + postal code: "Lagos 100281", "Abuja 900001"
+      /^[A-Z][a-zA-Z\s]+\d{5,6}\s*$/,
+      // Standalone city names (common on Nigerian/international receipts)
+      /^(Lagos|Abuja|Ikeja|Lekki|Victoria\s*Island|Ikoyi|Port\s*Harcourt|Ibadan|Kano|Accra|Nairobi|Dar\s*es\s*Salaam)\s*$/i,
+    ];
+    return noisePatterns.some((p) => p.test(line));
+  };
 
   // Pre-process: merge orphan text lines that OCR split from the previous line
   // e.g., "Chocolate" + "Cake" + "$8.00" → "Chocolate Cake" + "$8.00"
@@ -31,7 +68,10 @@ export function parseReceiptText(text: string): {
     // Also check: next line is text-only and current line does NOT already end with a price
     const currentHasPrice = /\d+\.\d{2}\s*$/.test(line);
 
-    if (hasText && !currentHasPrice && nextIsTextOnly && afterNextIsPrice) {
+    // Don't merge if current line is noise or next line is a summary label
+    const nextIsSummary = nextLine && (subtotalPattern.test(nextLine) || taxPattern.test(nextLine) || totalPattern.test(nextLine) || tipPattern.test(nextLine));
+
+    if (hasText && !currentHasPrice && nextIsTextOnly && afterNextIsPrice && !isNoiseLine(line) && !nextIsSummary) {
       lines.push(line + " " + nextLine);
       i++; // skip the merged line
     } else {
@@ -75,51 +115,19 @@ export function parseReceiptText(text: string): {
 
   // Currency-aware price pattern: handles "1,500.00", "250.00", "250", with optional currency before/after
   const currSym = `(?:[$€£¥₦₹₩₵]|R\\$|C\\$|A\\$|KSh|KES|NGN)?`;
-  // Price: "1,500.00" or "500.00" or "250" — comma is thousands separator when followed by 3 digits
-  const priceNum = `(\\d{1,3}(?:,\\d{3})*(?:\\.\\d{1,2})?|\\d+\\.\\d{1,2}|\\d+)`;
+  // Price: "1,500.00" or "500.00" or "3,50" (comma-decimal) or "250"
+  const priceNum = `(\\d{1,3}(?:,\\d{3})*(?:\\.\\d{1,2})?|\\d+\\.\\d{1,2}|\\d+,\\d{1,2}|\\d+)`;
   const priceOnlyPattern = new RegExp(`^${currSym}\\s*${priceNum}\\s*${currSym}\\s*$`);
   const priceAtEndPattern = new RegExp(`^(.+?)\\s+${currSym}\\s*${priceNum}\\s*${currSym}\\s*$`);
   // Quantity line: "2 x 380.00" or "3 @ 12.50"
   const qtyPricePattern = /^(\d+)\s*[xX@]\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+\.\d{1,2}|\d+)$/;
-  const subtotalPattern = /sub\s*-?\s*total/i;
-  const taxPattern = /\btax(?:es)?\b|\bhst\b|\bgst\b|\bpst\b|\bvat\b|\bctl\b|\bconsumption\s*tax\b/i;
-  const totalPattern = /\btotal\b|\bamount\s*due\b|\bbalance\s*due\b|\bbill\s*amount\b/i;
-  const tipPattern = /\btip\b|\bgratuity\b/i;
-
   const parsePrice = (s: string): number => {
+    // Comma as decimal separator: "3,50" (not thousands like "1,000")
+    if (/^\d+,\d{1,2}$/.test(s)) {
+      return parseFloat(s.replace(",", "."));
+    }
     // Remove thousands commas, then parse
     return parseFloat(s.replace(/,/g, ""));
-  };
-
-  const isNoiseLine = (line: string): boolean => {
-    const noisePatterns = [
-      /^(tel|phone|fax|address|www|http|date|time|order|check|table|server|cashier|card|visa|master|amex|debit|credit|change|balance\b(?!\s*due)|thank|receipt|welcome|store|guest|transaction|ref|auth|approved|member|loyalty|reward|points|earn|share|ask anything|thinking|chat|served\s+by|guests?:|buy\s+goods|till\s+number)/i,
-      /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/,
-      /^\d{1,2}:\d{2}/,
-      /^#\d+/,
-      /^\*{2,}/,
-      /^-{3,}/,
-      /^={3,}/,
-      /^\d{4,}$/,
-      /^x{4,}/i,
-      /\bdiscount\b|\bsavings\b|\bcoupon\b|\bpromo\b/i,
-      /can make mistakes/i,
-      /please come again/i,
-      /bloomberg|forex|home \|/i,
-      /[a-f0-9]{20,}/i,
-      /^at\s+table\b/i,
-      // Address lines: "City, ST 12345" or "123 Street Name"
-      /^[A-Z][a-zA-Z\s]+,\s*[A-Z]{2}\s+\d{5}/,
-      /^\d{1,5}\s+[A-Z][a-zA-Z\s]+(lane|st|street|ave|avenue|rd|road|blvd|dr|drive|way|ct|court|pl|place|circle|cir)\b/i,
-      // "Test Receipt", "OCR App", etc.
-      /\btest\s+receipt\b/i,
-      /\bdining\s+with\b/i,
-      // City/location + postal code: "Lagos 100281", "Abuja 900001"
-      /^[A-Z][a-zA-Z\s]+\d{5,6}\s*$/,
-      // Standalone city names (common on Nigerian/international receipts)
-      /^(Lagos|Abuja|Ikeja|Lekki|Victoria\s*Island|Ikoyi|Port\s*Harcourt|Ibadan|Kano|Accra|Nairobi|Dar\s*es\s*Salaam)\s*$/i,
-    ];
-    return noisePatterns.some((p) => p.test(line));
   };
 
   const isItemNameLine = (line: string): boolean => {
@@ -133,7 +141,7 @@ export function parseReceiptText(text: string): {
   };
 
   const extractPrice = (line: string): number | null => {
-    const m = line.match(/(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+\.\d{1,2}|\d+)/);
+    const m = line.match(/(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+\.\d{1,2}|\d+,\d{1,2}|\d+)/);
     if (m) return parsePrice(m[1]);
     return null;
   };
