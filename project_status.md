@@ -1,6 +1,6 @@
 # BillBreeze - Project Status
 
-**Last Updated**: 2026-03-13
+**Last Updated**: 2026-03-25
 **Platform**: Expo 54 / React Native 0.81 (serverless)
 **Stage**: App Store Ready (pending Apple Developer enrollment)
 **Repo**: https://github.com/olaotantc/billbreeze
@@ -221,6 +221,7 @@ Camera/Gallery -> JPEG -> On-device ML Kit OCR -> parseReceiptText()
 ---
 
 ## History
+- **March 25, 2026**: Drafted X launch posts (4 variants: zero-infra dev angle + relatable broader angle). Saved to `cowork/deliverables/x-launch-posts.md`. Posting strategy: stagger dev + broad posts same day.
 - **March 13, 2026**: Fixed sign-out redirect (auth guard in tabs layout). Removed "free forever" claims from landing page. Fixed stale payer assignments (lineItemIds dep). Deployed landing page to billbreeze.co via Vercel. Connected custom domain. Merged dev into main (PR #9). Created comprehensive to-do list.
 - **March 12, 2026**: Landing page updates (remove fake stats, add Splitwise SEO section). Added BillBreeze branding to share text. Local analytics counters. Fixed split rounding, falsy zero checks, tax/tip proportional distribution. Vercel config. Created roadmap at docs/roadmap.md. Planned Firebase integration for Phase A.
 - **March 11, 2026**: App Store preparation. Replaced server-side Vision API with on-device ML Kit OCR. Deleted Express server, Drizzle, and all server deps. Created EAS build config, privacy policy screen, wired settings. App is now fully serverless ($0/mo infrastructure). Blocked only on Apple Developer re-enrollment.
