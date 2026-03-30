@@ -83,6 +83,47 @@ export default function CameraScreen() {
     }
   };
 
+  // Web: skip camera entirely, show upload UI
+  if (Platform.OS === "web") {
+    return (
+      <View style={[styles.permissionContainer, { paddingTop: topInset }]}>
+        <Pressable style={styles.backButton} onPress={() => router.back()}>
+          <Feather name="x" size={24} color={Colors.text} />
+        </Pressable>
+        <View style={styles.permissionContent}>
+          <View style={styles.permissionIcon}>
+            <Ionicons name="images-outline" size={40} color={Colors.textTertiary} />
+          </View>
+          <Text style={styles.permissionTitle}>Upload Receipt</Text>
+          <Text style={styles.permissionText}>
+            Choose a photo of your receipt to scan
+          </Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.permissionButton,
+              pressed && { opacity: 0.85 },
+            ]}
+            onPress={handleGallery}
+          >
+            <Text style={styles.permissionButtonText}>Choose Photo</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.galleryButton,
+              pressed && { opacity: 0.7 },
+            ]}
+            onPress={() => {
+              setPendingImage(null);
+              router.replace("/receipt-review");
+            }}
+          >
+            <Text style={styles.galleryButtonText}>Enter Items Manually</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   if (!permission) {
     return (
       <View style={styles.centered}>

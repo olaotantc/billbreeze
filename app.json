@@ -38,7 +38,16 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "BillBreeze",
+      "shortName": "BillBreeze",
+      "description": "Split bills instantly. Scan receipts, split costs, send payment requests.",
+      "themeColor": "#004E45",
+      "backgroundColor": "#F8F8F8",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",

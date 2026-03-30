@@ -97,10 +97,18 @@ export default function ReceiptReviewScreen() {
   const scanReceiptOnDevice = async (imageUri: string) => {
     setIsScanning(true);
     try {
-      // Try on-device ML Kit first (works in dev builds + production)
-      const MlkitOcr = require("react-native-mlkit-ocr").default;
-      const ocrResult = await MlkitOcr.detectFromUri(imageUri);
-      const fullText = ocrResult.map((block: { text: string }) => block.text).join("\n");
+      let fullText = "";
+
+      if (Platform.OS === "web") {
+        // Use Tesseract.js on web
+        const { recognizeTextWeb } = await import("@/lib/ocr-web");
+        fullText = await recognizeTextWeb(imageUri);
+      } else {
+        // Use ML Kit on native (works in dev builds + production)
+        const MlkitOcr = require("react-native-mlkit-ocr").default;
+        const ocrResult = await MlkitOcr.detectFromUri(imageUri);
+        fullText = ocrResult.map((block: { text: string }) => block.text).join("\n");
+      }
 
       if (__DEV__) {
         console.log("[OCR RAW TEXT] ─────────────────────────");
@@ -120,7 +128,7 @@ export default function ReceiptReviewScreen() {
 
       applyOcrResult(parseReceiptText(fullText));
     } catch (e: any) {
-      console.log("[OCR] ML Kit unavailable:", e?.message);
+      console.log("[OCR] Error:", e?.message);
       setPendingImage(null);
       setScanComplete(true);
       Alert.alert(
